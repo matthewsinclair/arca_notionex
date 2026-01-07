@@ -22,3 +22,5 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 arca_notionex-*.tar
 
+# Do not commit .env (for storing API keys, etc)
+.env

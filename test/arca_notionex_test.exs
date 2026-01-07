@@ -1,8 +1,7 @@
 defmodule ArcaNotionexTest do
   use ExUnit.Case
-  doctest ArcaNotionex
 
-  test "greets the world" do
-    assert ArcaNotionex.hello() == :world
+  test "returns version" do
+    assert ArcaNotionex.version() == "0.1.0"
   end
 end

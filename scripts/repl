@@ -1,0 +1,24 @@
+#!/bin/bash
+# Notionex REPL wrapper script with rlwrap integration
+
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_DIR="$( cd "$SCRIPT_DIR/.." && pwd )"
+COMPLETIONS_FILE="$SCRIPT_DIR/completions/completions.txt"
+
+# Set REPL_MODE to enable CLI configuration
+export REPL_MODE=true
+
+cd "$PROJECT_DIR"
+
+# Check if rlwrap is available
+if command -v rlwrap &> /dev/null; then
+    if [ -f "$COMPLETIONS_FILE" ]; then
+        rlwrap -f "$COMPLETIONS_FILE" mix notionex repl "$@"
+    else
+        rlwrap mix notionex repl "$@"
+    fi
+else
+    echo "Note: Install rlwrap for better REPL experience (history, completion)"
+    mix notionex repl "$@"
+fi

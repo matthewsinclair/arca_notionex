@@ -1,0 +1,12 @@
+#!/bin/bash
+# Notionex CLI wrapper script
+
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_DIR="$( cd "$SCRIPT_DIR/.." && pwd )"
+
+# Set REPL_MODE to enable CLI configuration
+export REPL_MODE=true
+
+# Run the CLI
+cd "$PROJECT_DIR" && mix notionex "$@"
