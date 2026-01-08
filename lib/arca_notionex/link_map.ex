@@ -114,7 +114,8 @@ defmodule ArcaNotionex.LinkMap do
 
   Page mentions use the hyphenated UUID format for native Notion navigation.
   """
-  @spec resolve_for_notion(t(), String.t(), keyword()) :: {:page_mention, String.t()} | {:link, String.t()}
+  @spec resolve_for_notion(t(), String.t(), keyword()) ::
+          {:page_mention, String.t()} | {:link, String.t()}
   def resolve_for_notion(link_map, href, opts \\ []) do
     current_file = Keyword.get(opts, :current_file)
 

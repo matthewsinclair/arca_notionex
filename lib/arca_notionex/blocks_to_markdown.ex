@@ -195,7 +195,8 @@ defmodule ArcaNotionex.BlocksToMarkdown do
   defp maybe_wrap_strikethrough(text, %RichText{strikethrough: true}), do: "~~#{text}~~"
   defp maybe_wrap_strikethrough(text, _), do: text
 
-  defp maybe_wrap_link(text, %RichText{link: link}, link_map) when is_binary(link) and link != "" do
+  defp maybe_wrap_link(text, %RichText{link: link}, link_map)
+       when is_binary(link) and link != "" do
     resolved_link = resolve_link(link, link_map)
     "[#{text}](#{resolved_link})"
   end

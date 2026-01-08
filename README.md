@@ -80,6 +80,7 @@ notionex pull --dir ./docs --root-page <PAGE_ID> --conflict notion-wins
 ```
 
 **Conflict resolution options:**
+
 - `manual` (default) - Only pull if Notion is newer and local unchanged
 - `local-wins` - Never overwrite local files
 - `notion-wins` - Always use Notion version

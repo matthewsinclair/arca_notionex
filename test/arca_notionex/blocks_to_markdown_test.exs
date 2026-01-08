@@ -152,15 +152,17 @@ defmodule ArcaNotionex.BlocksToMarkdownTest do
 
   describe "table conversion" do
     test "converts simple table with header" do
-      header = NotionBlock.table_row([
-        [RichText.text("A")],
-        [RichText.text("B")]
-      ])
+      header =
+        NotionBlock.table_row([
+          [RichText.text("A")],
+          [RichText.text("B")]
+        ])
 
-      row1 = NotionBlock.table_row([
-        [RichText.text("1")],
-        [RichText.text("2")]
-      ])
+      row1 =
+        NotionBlock.table_row([
+          [RichText.text("1")],
+          [RichText.text("2")]
+        ])
 
       table = NotionBlock.table(2, [header, row1], has_column_header: true)
 
@@ -171,10 +173,11 @@ defmodule ArcaNotionex.BlocksToMarkdownTest do
     end
 
     test "escapes pipes in cell content" do
-      row = NotionBlock.table_row([
-        [RichText.text("A | B")],
-        [RichText.text("C")]
-      ])
+      row =
+        NotionBlock.table_row([
+          [RichText.text("A | B")],
+          [RichText.text("C")]
+        ])
 
       table = NotionBlock.table(2, [row])
 
@@ -333,16 +336,19 @@ defmodule ArcaNotionex.BlocksToMarkdownTest do
 
     test "resolves links in various block types", %{link_map: link_map} do
       # Heading with link
-      heading = NotionBlock.heading_1([%RichText{content: "Overview", link: "https://notion.so/abc123"}])
+      heading =
+        NotionBlock.heading_1([%RichText{content: "Overview", link: "https://notion.so/abc123"}])
 
       # List item with link
-      list_item = NotionBlock.bulleted_list_item([
-        RichText.text("See "),
-        %RichText{content: "guide", link: "https://notion.so/def456"}
-      ])
+      list_item =
+        NotionBlock.bulleted_list_item([
+          RichText.text("See "),
+          %RichText{content: "guide", link: "https://notion.so/def456"}
+        ])
 
       # Quote with link
-      quote_block = NotionBlock.quote([%RichText{content: "overview", link: "https://notion.so/abc123"}])
+      quote_block =
+        NotionBlock.quote([%RichText{content: "overview", link: "https://notion.so/abc123"}])
 
       blocks = [heading, list_item, quote_block]
 

@@ -123,7 +123,9 @@ defmodule ArcaNotionex.Commands.PullCommand do
   defp parse_scope("linked-only"), do: {:ok, :linked_only}
   defp parse_scope("all-children"), do: {:ok, :all_children}
   defp parse_scope("list"), do: {:ok, :list}
-  defp parse_scope(other), do: {:error, "Invalid scope: #{other}. Use linked-only, all-children, or list"}
+
+  defp parse_scope(other),
+    do: {:error, "Invalid scope: #{other}. Use linked-only, all-children, or list"}
 
   defp parse_list(nil, :list), do: {:error, "--list is required when using --scope list"}
   defp parse_list(nil, _scope), do: {:ok, nil}
@@ -150,6 +152,7 @@ defmodule ArcaNotionex.Commands.PullCommand do
   defp parse_conflict("newest-wins"), do: {:ok, :newest_wins}
 
   defp parse_conflict(other) do
-    {:error, "Invalid conflict strategy: #{other}. Use manual, local-wins, notion-wins, or newest-wins"}
+    {:error,
+     "Invalid conflict strategy: #{other}. Use manual, local-wins, notion-wins, or newest-wins"}
   end
 end

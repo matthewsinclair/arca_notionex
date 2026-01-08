@@ -28,7 +28,8 @@ defmodule ArcaNotionex.Conflict do
 
   alias ArcaNotionex.Schemas.ConflictEntry
 
-  @type conflict_status :: :no_conflict | :notion_newer | :local_newer | :both_modified | :new_page
+  @type conflict_status ::
+          :no_conflict | :notion_newer | :local_newer | :both_modified | :new_page
   @type resolution_strategy :: :manual | :local_wins | :notion_wins | :newest_wins
 
   @type local_file :: %{
@@ -42,7 +43,8 @@ defmodule ArcaNotionex.Conflict do
           last_edited_time: DateTime.t()
         }
 
-  @type resolution :: {:skip, String.t()} | {:update, notion_page()} | {:conflict, ConflictEntry.t()}
+  @type resolution ::
+          {:skip, String.t()} | {:update, notion_page()} | {:conflict, ConflictEntry.t()}
 
   @doc """
   Detects conflict status between a local file and Notion page.
@@ -88,7 +90,8 @@ defmodule ArcaNotionex.Conflict do
   - `{:update, notion_page}` - Update local file with Notion content
   - `{:conflict, entry}` - Conflict needs manual resolution
   """
-  @spec resolve(resolution_strategy(), conflict_status(), local_file() | nil, notion_page()) :: resolution()
+  @spec resolve(resolution_strategy(), conflict_status(), local_file() | nil, notion_page()) ::
+          resolution()
   def resolve(strategy, status, local_file, notion_page)
 
   # :local_wins - Always skip pulls

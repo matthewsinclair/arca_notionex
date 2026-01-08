@@ -199,7 +199,9 @@ defmodule ArcaNotionex.BlocksFromNotionTest do
       assert {:ok, [block]} = BlocksFromNotion.parse(blocks)
       assert block.type == :table_row
       assert length(block.cells) == 3
-      assert [[%RichText{content: "A"}], [%RichText{content: "B"}], [%RichText{content: "C"}]] = block.cells
+
+      assert [[%RichText{content: "A"}], [%RichText{content: "B"}], [%RichText{content: "C"}]] =
+               block.cells
     end
 
     test "skips unsupported block types" do
@@ -216,7 +218,9 @@ defmodule ArcaNotionex.BlocksFromNotionTest do
       blocks = [
         %{
           "type" => "heading_1",
-          "heading_1" => %{"rich_text" => [%{"type" => "text", "text" => %{"content" => "Title"}}]}
+          "heading_1" => %{
+            "rich_text" => [%{"type" => "text", "text" => %{"content" => "Title"}}]
+          }
         },
         %{
           "type" => "paragraph",
