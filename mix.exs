@@ -1,10 +1,12 @@
 defmodule ArcaNotionex.MixProject do
   use Mix.Project
 
+  @version "VERSION.md" |> File.read!() |> String.trim()
+
   def project do
     [
       app: :arca_notionex,
-      version: "0.1.0",
+      version: @version,
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
