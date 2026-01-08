@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] - 2026-01-08
+
+### Added
+
+- **Two-pass --relink** - When `--relink` is used with new files (no notion_id), sync now automatically does two passes: Pass 1 creates pages and writes notion_ids, Pass 2 rebuilds LinkMap and resolves internal links. No more need to run sync twice.
+
+### Changed
+
+- **Refactored sync_files** - Replaced non-idiomatic `case true/false` with pattern-matched `sync_single_file/8` function heads.
+
+- **Eliminated double file read** - Files are now read once via `read_and_parse_file/1` and the parsed frontmatter is used for branching, improving efficiency.
+
+### Tests
+
+- Added 5 new tests for notion_id optimization and two-pass --relink behavior.
+- Total: 187 tests, 0 failures.
+
 ## [0.1.4] - 2026-01-08
 
 ### Fixed
