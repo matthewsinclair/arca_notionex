@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6] - 2026-01-08
+
+### Changed
+
+- **Audit command table rendering** - Refactored audit command to use proper Arca.Cli `Ctx` flow and Owl-based table rendering instead of raw TableRex output. Tables now render cleanly with proper styling.
+
+### Added
+
+- **GitHub Actions CI** - Added `.github/workflows/ci.yml` for automated testing on push/PR to main. Runs compile, format check, and tests.
+
+- **Tool versions** - Added `.tool-versions` specifying Erlang 28.0 and Elixir 1.19.4.
+
 ## [0.1.5] - 2026-01-08
 
 ### Added
