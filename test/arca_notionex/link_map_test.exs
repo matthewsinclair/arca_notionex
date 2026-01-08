@@ -231,7 +231,8 @@ defmodule ArcaNotionex.LinkMapTest do
           current_file: "docs/child.md"
         )
 
-      assert result == "https://notion.so/root-id"
+      # Hyphens are stripped from notion_id in URLs
+      assert result == "https://notion.so/rootid"
     end
   end
 end

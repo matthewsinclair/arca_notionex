@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-01-08
+
+### Fixed
+
+- **Notion URL format** - Strip hyphens from UUID in generated Notion URLs. Notion expects 32-char hex without hyphens (e.g., `https://notion.so/2e201c86169781b2afd9deeff19e8a56` not `https://notion.so/2e201c86-1697-81b2-afd9-deeff19e8a56`).
+
 ## [0.1.0] - 2026-01-08
 
 ### Added

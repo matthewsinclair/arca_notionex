@@ -126,7 +126,8 @@ defmodule ArcaNotionex.LinkMap do
             href
 
           notion_id ->
-            base_url = "https://notion.so/#{notion_id}"
+            # Notion URLs use the 32-char hex string without hyphens
+            base_url = "https://notion.so/#{String.replace(notion_id, "-", "")}"
             if anchor, do: "#{base_url}##{anchor}", else: base_url
         end
 

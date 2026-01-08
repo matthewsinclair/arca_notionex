@@ -22,9 +22,11 @@ See [System Overview](system-overview.md) for details.
 ```
 
 **Current behavior:**
+
 - Link becomes `https://www.notion.so/system-overview.md` (broken)
 
 **Expected behavior:**
+
 - Link becomes `https://www.notion.so/abc123...` (actual Notion page ID)
 
 ## Solution: Two-Pass Sync with `--relink`
@@ -43,13 +45,13 @@ notionex sync --dir ./docs --root-page abc123 --relink
 
 ### Modules Modified
 
-| Module | Changes |
-|--------|---------|
-| `lib/arca_notionex/link_map.ex` | Shared module for ST0006+ST0007 (already created in ST0006) |
-| `lib/arca_notionex/ast_to_blocks.ex` | Added `link_map` and `current_file` options |
-| `lib/arca_notionex/commands/sync_command.ex` | Added `--relink` flag |
-| `lib/arca_notionex/sync.ex` | Build and pass LinkMap when relink=true |
-| `scripts/completions/completions.txt` | Added `--relink` |
+| Module                                       | Changes                                                     |
+|----------------------------------------------|-------------------------------------------------------------|
+| `lib/arca_notionex/link_map.ex`              | Shared module for ST0006+ST0007 (already created in ST0006) |
+| `lib/arca_notionex/ast_to_blocks.ex`         | Added `link_map` and `current_file` options                 |
+| `lib/arca_notionex/commands/sync_command.ex` | Added `--relink` flag                                       |
+| `lib/arca_notionex/sync.ex`                  | Build and pass LinkMap when relink=true                     |
+| `scripts/completions/completions.txt`        | Added `--relink`                                            |
 
 ### Key Changes
 
@@ -58,6 +60,7 @@ notionex sync --dir ./docs --root-page abc123 --relink
    - `:current_file` - Current file path for resolving relative links
 
 2. **Link Resolution Flow:**
+
    ```
    [link](other.md)
    → resolve_link() checks if .md file
@@ -81,8 +84,8 @@ notionex sync --dir ./docs --root-page abc123 --relink
 
 Both ST0006 (pull) and ST0007 (sync --relink) share the `LinkMap` module:
 
-| Direction | Usage |
-|-----------|-------|
+| Direction        | Usage                                            |
+|------------------|--------------------------------------------------|
 | Forward (ST0007) | path → notion_id: `[link](file.md)` → Notion URL |
 | Reverse (ST0006) | notion_id → path: Notion URL → `[link](file.md)` |
 
