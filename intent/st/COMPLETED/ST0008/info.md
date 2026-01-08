@@ -1,7 +1,7 @@
 ---
-verblock: "08 Jan 2026:v0.3: matts - Implementation complete"
+verblock: "08 Jan 2026:v0.4: matts - Complete with follow-up refinements"
 intent_version: 2.2.0
-status: WIP
+status: Completed
 created: 20260108
 completed: 20260108
 ---
@@ -88,10 +88,20 @@ All index.md files with `# Index` heading get the same title.
 - [x] `index.md` in `architecture/` gets title "Architecture" not "Index"
 - [x] Per-directory duplicate titles cause sync to fail
 - [x] `content_hash` stored in frontmatter after sync
-- [ ] Unchanged files are skipped (hash infrastructure in place, skip logic TODO)
-- [ ] `--force` syncs all files regardless of changes (CLI flags deferred)
-- [ ] `--local-wins` / `--notion-wins` resolve conflicts (CLI flags deferred)
-- [x] All existing tests pass + new tests added (182 tests, 0 failures)
+- [x] Two-pass `--relink` automatically handles new files
+- [x] Pattern-matched code style (no `case true/false`)
+- [x] Single file read per sync (eliminated double read)
+- [x] Audit table uses proper Ctx flow with Owl rendering
+- [x] GitHub Actions CI for automated testing
+- [x] `--version` / `-v` flags work correctly
+- [x] MIT License for open source distribution
+- [x] All tests pass (187 tests, 0 failures)
+
+### Deferred to Future Work
+
+- [ ] `--force` syncs all files regardless of changes
+- [ ] `--local-wins` / `--notion-wins` conflict resolution flags
+- [ ] Skip unchanged files based on hash comparison
 
 ## Related Steel Threads
 
