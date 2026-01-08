@@ -24,3 +24,6 @@ arca_notionex-*.tar
 
 # Do not commit .env (for storing API keys, etc)
 .env
+
+# Escript build artifact
+/notionex

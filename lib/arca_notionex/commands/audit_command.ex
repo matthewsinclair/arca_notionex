@@ -1,4 +1,4 @@
-defmodule ArcaNotionex.Commands.NotionexAuditCommand do
+defmodule ArcaNotionex.Commands.AuditCommand do
   @moduledoc """
   Audit command - compares local markdown with Notion state.
   """
@@ -6,8 +6,8 @@ defmodule ArcaNotionex.Commands.NotionexAuditCommand do
 
   alias ArcaNotionex.Audit
 
-  config :"notionex.audit",
-    name: "notionex.audit",
+  config :audit,
+    name: "audit",
     about: "Compare local markdown files vs Notion state",
     help: """
     Audits a directory of markdown files against Notion pages.
@@ -22,8 +22,8 @@ defmodule ArcaNotionex.Commands.NotionexAuditCommand do
       --json       Output as JSON instead of table
 
     Example:
-      notionex.audit --dir ./docs --root-page abc123-def456
-      notionex.audit --dir ./docs --root-page abc123 --status stale
+      notionex audit --dir ./docs --root-page abc123-def456
+      notionex audit --dir ./docs --root-page abc123 --status stale
     """,
     options: [
       dir: [

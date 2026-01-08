@@ -2,10 +2,9 @@ help
 about
 repl
 quit
-notionex
-notionex.prepare
-notionex.audit
-notionex.sync
+audit
+sync
+prepare
 --help
 --dir
 --root-page

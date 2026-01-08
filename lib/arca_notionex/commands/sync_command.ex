@@ -1,4 +1,4 @@
-defmodule ArcaNotionex.Commands.NotionexSyncCommand do
+defmodule ArcaNotionex.Commands.SyncCommand do
   @moduledoc """
   Sync command - pushes markdown to Notion pages.
   """
@@ -6,8 +6,8 @@ defmodule ArcaNotionex.Commands.NotionexSyncCommand do
 
   alias ArcaNotionex.Sync
 
-  config :"notionex.sync",
-    name: "notionex.sync",
+  config :sync,
+    name: "sync",
     about: "Push markdown files to Notion pages",
     help: """
     Syncs a directory of markdown files to Notion.
@@ -24,8 +24,8 @@ defmodule ArcaNotionex.Commands.NotionexSyncCommand do
       --dry-run    Show what would be synced without making changes
 
     Example:
-      notionex.sync --dir ./docs --root-page abc123-def456
-      notionex.sync --dir ./docs --root-page abc123 --dry-run
+      notionex sync --dir ./docs --root-page abc123-def456
+      notionex sync --dir ./docs --root-page abc123 --dry-run
     """,
     options: [
       dir: [

@@ -1,4 +1,4 @@
-defmodule ArcaNotionex.Commands.NotionexPrepareCommand do
+defmodule ArcaNotionex.Commands.PrepareCommand do
   @moduledoc """
   Command to prepare markdown files for Notion sync by adding frontmatter.
   """
@@ -6,8 +6,8 @@ defmodule ArcaNotionex.Commands.NotionexPrepareCommand do
 
   alias ArcaNotionex.Frontmatter
 
-  config :"notionex.prepare",
-    name: "notionex.prepare",
+  config :prepare,
+    name: "prepare",
     about: "Add frontmatter to markdown files for Notion sync",
     help: """
     Prepares markdown files for Notion sync by adding YAML frontmatter.
@@ -20,8 +20,8 @@ defmodule ArcaNotionex.Commands.NotionexPrepareCommand do
       --dry-run    Show what would be done without making changes
 
     Example:
-      notionex.prepare --dir ./docs
-      notionex.prepare --dir ./docs --dry-run
+      notionex prepare --dir ./docs
+      notionex prepare --dir ./docs --dry-run
     """,
     options: [
       dir: [
