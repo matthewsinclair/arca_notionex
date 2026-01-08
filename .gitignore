@@ -27,3 +27,6 @@ arca_notionex-*.tar
 
 # Escript build artifact
 /notionex
+
+# Editor/IDE config
+.claude/

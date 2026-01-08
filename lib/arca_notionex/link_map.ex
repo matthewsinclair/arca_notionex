@@ -105,7 +105,49 @@ defmodule ArcaNotionex.LinkMap do
     end
   end
 
-  # Forward resolution: path → Notion URL
+  @doc """
+  Resolves a link for Notion API, returning either a page mention or regular link.
+
+  Returns:
+  - `{:page_mention, page_id}` for internal .md links that resolve to a Notion page
+  - `{:link, url}` for external links or unresolved internal links
+
+  Page mentions use the hyphenated UUID format for native Notion navigation.
+  """
+  @spec resolve_for_notion(t(), String.t(), keyword()) :: {:page_mention, String.t()} | {:link, String.t()}
+  def resolve_for_notion(link_map, href, opts \\ []) do
+    current_file = Keyword.get(opts, :current_file)
+
+    cond do
+      # External link
+      String.starts_with?(href, "http://") or String.starts_with?(href, "https://") ->
+        {:link, href}
+
+      # Anchor only
+      String.starts_with?(href, "#") ->
+        {:link, href}
+
+      # Internal .md link - try to resolve to page mention
+      is_markdown_link?(href) ->
+        {path, _anchor} = split_anchor(href)
+        resolved_path = resolve_relative_path(path, current_file)
+
+        case path_to_notion_id(link_map, resolved_path) do
+          nil ->
+            {:link, href}
+
+          notion_id ->
+            # Page mentions use hyphenated UUID (don't strip hyphens)
+            {:page_mention, notion_id}
+        end
+
+      # Other
+      true ->
+        {:link, href}
+    end
+  end
+
+  # Forward resolution: path → Notion URL (legacy, for backwards compatibility)
   defp resolve_forward(link_map, href, current_file) do
     cond do
       # External link - keep as-is

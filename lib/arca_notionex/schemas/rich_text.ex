@@ -27,6 +27,7 @@ defmodule ArcaNotionex.Schemas.RichText do
           type: String.t(),
           content: String.t(),
           link: String.t() | nil,
+          page_id: String.t() | nil,
           bold: boolean(),
           italic: boolean(),
           strikethrough: boolean(),
@@ -41,6 +42,7 @@ defmodule ArcaNotionex.Schemas.RichText do
     field(:type, :string, default: "text")
     field(:content, :string, default: "")
     field(:link, :string)
+    field(:page_id, :string)
     field(:bold, :boolean, default: false)
     field(:italic, :boolean, default: false)
     field(:strikethrough, :boolean, default: false)
@@ -60,6 +62,7 @@ defmodule ArcaNotionex.Schemas.RichText do
       :type,
       :content,
       :link,
+      :page_id,
       :bold,
       :italic,
       :strikethrough,
@@ -122,6 +125,18 @@ defmodule ArcaNotionex.Schemas.RichText do
   end
 
   @doc """
+  Creates a page mention RichText struct.
+
+  Page mentions link to other Notion pages natively without browser redirects.
+  The page_id should include hyphens (e.g., "2e201c86-1697-81b2-afd9-deeff19e8a56").
+  Content is used as placeholder - Notion replaces it with the actual page title.
+  """
+  @spec page_mention(String.t(), String.t()) :: t()
+  def page_mention(content, page_id) do
+    %__MODULE__{type: "mention", content: content, page_id: page_id}
+  end
+
+  @doc """
   Parses a list of Notion API rich_text objects into RichText structs.
   """
   @spec from_notion([map()]) :: [t()]
@@ -172,6 +187,26 @@ defmodule ArcaNotionex.Schemas.RichText do
   Converts the RichText struct to Notion API format.
   """
   @spec to_notion(t()) :: map()
+  def to_notion(%__MODULE__{type: "mention", page_id: page_id} = rt) when is_binary(page_id) do
+    %{
+      "type" => "mention",
+      "mention" => %{
+        "type" => "page",
+        "page" => %{"id" => page_id}
+      },
+      "annotations" => %{
+        "bold" => rt.bold,
+        "italic" => rt.italic,
+        "strikethrough" => rt.strikethrough,
+        "underline" => rt.underline,
+        "code" => rt.code,
+        "color" => rt.color
+      },
+      "plain_text" => rt.content,
+      "href" => nil
+    }
+  end
+
   def to_notion(%__MODULE__{} = rt) do
     %{
       "type" => rt.type,

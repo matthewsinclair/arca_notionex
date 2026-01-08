@@ -209,11 +209,28 @@ defmodule ArcaNotionex.AstToBlocks do
 
   defp node_to_rich_text({"a", attrs, children, _}, opts) do
     href = get_attr(attrs, "href")
-    resolved_href = resolve_link(href, opts)
+    link_map = Keyword.get(opts, :link_map)
+    current_file = Keyword.get(opts, :current_file)
 
-    children
-    |> children_to_rich_text(opts)
-    |> Enum.map(&add_link(&1, resolved_href))
+    if link_map do
+      # Use page mentions for resolved internal links
+      case LinkMap.resolve_for_notion(link_map, href, current_file: current_file) do
+        {:page_mention, page_id} ->
+          # Get link text for the mention content
+          text = flatten_text(children)
+          [RichText.page_mention(text, page_id)]
+
+        {:link, resolved_href} ->
+          children
+          |> children_to_rich_text(opts)
+          |> Enum.map(&add_link(&1, resolved_href))
+      end
+    else
+      # No link_map - keep as regular link
+      children
+      |> children_to_rich_text(opts)
+      |> Enum.map(&add_link(&1, href))
+    end
   end
 
   defp node_to_rich_text({"del", _, children, _}, opts) do
@@ -227,19 +244,6 @@ defmodule ArcaNotionex.AstToBlocks do
   end
 
   defp node_to_rich_text(_, _opts), do: []
-
-  # Link resolution
-
-  defp resolve_link(href, opts) do
-    link_map = Keyword.get(opts, :link_map)
-    current_file = Keyword.get(opts, :current_file)
-
-    if link_map do
-      LinkMap.resolve_link(link_map, href, direction: :forward, current_file: current_file)
-    else
-      href
-    end
-  end
 
   # Annotation helpers
 
@@ -379,11 +383,13 @@ defmodule ArcaNotionex.AstToBlocks do
 
   defp merge_adjacent_text(rich_texts) do
     # Merge adjacent plain text with same annotations
+    # Don't merge mentions or items with different types
     rich_texts
     |> Enum.reduce([], fn rt, acc ->
       case acc do
         [prev | rest]
-        when prev.bold == rt.bold and prev.italic == rt.italic and
+        when prev.type == "text" and rt.type == "text" and
+               prev.bold == rt.bold and prev.italic == rt.italic and
                prev.code == rt.code and prev.link == rt.link ->
           merged = %{prev | content: prev.content <> rt.content}
           [merged | rest]
