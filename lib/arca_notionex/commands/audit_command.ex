@@ -4,6 +4,7 @@ defmodule ArcaNotionex.Commands.AuditCommand do
   """
   use Arca.Cli.Command.BaseCommand
 
+  alias Arca.Cli.Ctx
   alias ArcaNotionex.Audit
 
   config :audit,
@@ -57,7 +58,8 @@ defmodule ArcaNotionex.Commands.AuditCommand do
     ]
 
   @impl Arca.Cli.Command.CommandBehaviour
-  def handle(args, _settings, _optimus) do
+  def handle(args, settings, _optimus) do
+    ctx = Ctx.new(:audit, settings)
     dir = get_option(args, :dir)
     root_page = get_option(args, :root_page)
     status = parse_status(get_option(args, :status))
@@ -66,15 +68,23 @@ defmodule ArcaNotionex.Commands.AuditCommand do
     case Audit.audit_directory(dir, root_page_id: root_page, status: status) do
       {:ok, entries} ->
         if json_output do
-          format_json(entries)
+          ctx
+          |> Ctx.add_output({:text, format_json(entries)})
+          |> Ctx.complete(:ok)
         else
-          table = Audit.format_table(entries)
-          summary = Audit.format_summary(entries)
-          table <> "\n" <> summary
+          {table_rows, summary} = Audit.format_for_ctx(entries)
+
+          ctx
+          |> Ctx.add_output({:table, table_rows, [has_headers: true]})
+          |> Ctx.add_output({:info, summary})
+          |> Ctx.with_cargo(%{entries: length(entries)})
+          |> Ctx.complete(:ok)
         end
 
       {:error, _type, reason} ->
-        {:error, reason}
+        ctx
+        |> Ctx.add_output({:error, reason})
+        |> Ctx.complete(:error)
     end
   end
 

@@ -41,6 +41,33 @@ defmodule ArcaNotionex.Audit do
   end
 
   @doc """
+  Formats audit results for Ctx table output.
+  Returns {table_rows, summary_string} where table_rows is a list of lists
+  with the first row being headers.
+  """
+  @spec format_for_ctx([AuditEntry.t()]) :: {[[String.t()]], String.t()}
+  def format_for_ctx(entries) do
+    headers = ["File", "Title", "Local", "Notion", "Synced At", "Action"]
+
+    rows =
+      Enum.map(entries, fn entry ->
+        [
+          entry.file,
+          entry.title || "",
+          format_local_status(entry.local_status),
+          format_notion_status(entry.notion_status, entry.notion_id),
+          format_datetime(entry.synced_at),
+          format_action(entry.action_needed)
+        ]
+      end)
+
+    table_rows = [headers | rows]
+    summary = format_summary(entries)
+
+    {table_rows, summary}
+  end
+
+  @doc """
   Formats audit results as a table string.
   """
   @spec format_table([AuditEntry.t()]) :: String.t()
