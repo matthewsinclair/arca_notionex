@@ -17,7 +17,8 @@ defmodule ArcaNotionex.Schemas.Frontmatter do
   @type t :: %__MODULE__{
           title: String.t() | nil,
           notion_id: String.t() | nil,
-          notion_synced_at: DateTime.t() | nil
+          notion_synced_at: DateTime.t() | nil,
+          content_hash: String.t() | nil
         }
 
   @primary_key false
@@ -25,6 +26,7 @@ defmodule ArcaNotionex.Schemas.Frontmatter do
     field(:title, :string)
     field(:notion_id, :string)
     field(:notion_synced_at, :utc_datetime)
+    field(:content_hash, :string)
   end
 
   @doc """
@@ -33,7 +35,7 @@ defmodule ArcaNotionex.Schemas.Frontmatter do
   @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(struct \\ %__MODULE__{}, params) do
     struct
-    |> cast(params, [:title, :notion_id, :notion_synced_at])
+    |> cast(params, [:title, :notion_id, :notion_synced_at, :content_hash])
   end
 
   @doc """

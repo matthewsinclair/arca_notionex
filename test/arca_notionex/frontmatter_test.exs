@@ -143,4 +143,133 @@ defmodule ArcaNotionex.FrontmatterTest do
       assert body == body2
     end
   end
+
+  describe "derive_title_from_path/1" do
+    test "uses parent directory name for index.md in subdirectory" do
+      assert Frontmatter.derive_title_from_path("docs/architecture/index.md") == "Architecture"
+
+      assert Frontmatter.derive_title_from_path("a3-engineering/development/index.md") ==
+               "Development"
+    end
+
+    test "keeps Index for root index.md" do
+      assert Frontmatter.derive_title_from_path("index.md") == "Index"
+    end
+
+    test "humanizes regular filenames" do
+      assert Frontmatter.derive_title_from_path("my-great-doc.md") == "My Great Doc"
+      assert Frontmatter.derive_title_from_path("api_reference.md") == "Api Reference"
+    end
+
+    test "handles deeply nested index.md" do
+      assert Frontmatter.derive_title_from_path("a/b/c/d/index.md") == "D"
+    end
+
+    test "handles directory names with hyphens and underscores" do
+      assert Frontmatter.derive_title_from_path("my-great-section/index.md") == "My Great Section"
+      assert Frontmatter.derive_title_from_path("api_docs/index.md") == "Api Docs"
+    end
+  end
+
+  describe "compute_hash/1" do
+    test "computes SHA-256 hash with prefix" do
+      hash = Frontmatter.compute_hash("Hello world")
+      assert String.starts_with?(hash, "sha256:")
+      # "sha256:" (7) + 64 hex chars
+      assert String.length(hash) == 71
+    end
+
+    test "same content produces same hash" do
+      hash1 = Frontmatter.compute_hash("test content")
+      hash2 = Frontmatter.compute_hash("test content")
+      assert hash1 == hash2
+    end
+
+    test "different content produces different hash" do
+      hash1 = Frontmatter.compute_hash("content a")
+      hash2 = Frontmatter.compute_hash("content b")
+      refute hash1 == hash2
+    end
+  end
+
+  describe "content_changed?/2" do
+    test "returns true when hash differs" do
+      stored = Frontmatter.compute_hash("old content")
+      assert Frontmatter.content_changed?("new content", stored)
+    end
+
+    test "returns false when hash matches" do
+      content = "same content"
+      stored = Frontmatter.compute_hash(content)
+      refute Frontmatter.content_changed?(content, stored)
+    end
+
+    test "returns true when stored hash is nil (first sync)" do
+      assert Frontmatter.content_changed?("any content", nil)
+    end
+  end
+
+  describe "ensure_frontmatter/1" do
+    @moduletag :tmp_dir
+
+    test "derives smart title for index.md", %{tmp_dir: tmp_dir} do
+      # Create nested directory
+      arch_dir = Path.join(tmp_dir, "architecture")
+      File.mkdir_p!(arch_dir)
+
+      content = """
+      # Index
+
+      Some content here.
+      """
+
+      file_path = Path.join(arch_dir, "index.md")
+      File.write!(file_path, content)
+
+      assert :ok = Frontmatter.ensure_frontmatter(file_path)
+
+      # Re-read and verify title was set to parent dir name
+      {:ok, updated_content} = File.read(file_path)
+      assert {:ok, fm, _body} = Frontmatter.parse(updated_content)
+      assert fm.title == "Architecture"
+    end
+
+    test "keeps meaningful titles that are not Index", %{tmp_dir: tmp_dir} do
+      content = """
+      ---
+      title: "My Custom Title"
+      ---
+      # Some Content
+      """
+
+      file_path = Path.join(tmp_dir, "test.md")
+      File.write!(file_path, content)
+
+      assert {:already_has_title, "My Custom Title"} = Frontmatter.ensure_frontmatter(file_path)
+    end
+
+    test "overrides generic Index title with smart derivation", %{tmp_dir: tmp_dir} do
+      # Create nested directory
+      docs_dir = Path.join(tmp_dir, "documentation")
+      File.mkdir_p!(docs_dir)
+
+      content = """
+      ---
+      title: "Index"
+      ---
+      # Index
+      """
+
+      file_path = Path.join(docs_dir, "index.md")
+      File.write!(file_path, content)
+
+      # Should update because "Index" is generic
+      assert :ok = Frontmatter.ensure_frontmatter(file_path)
+
+      # Verify title was changed
+      {:ok, updated_content} = File.read(file_path)
+      assert {:ok, fm, _body} = Frontmatter.parse(updated_content)
+      assert fm.title == "Documentation"
+    end
+  end
 end

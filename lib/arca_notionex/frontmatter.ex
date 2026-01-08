@@ -95,18 +95,79 @@ defmodule ArcaNotionex.Frontmatter do
 
   @doc """
   Sets the notion_id in a file's frontmatter.
+
+  When body is provided, also computes and stores the content hash for
+  incremental sync support.
   """
-  @spec set_notion_id(String.t(), String.t()) :: :ok | {:error, atom(), String.t()}
-  def set_notion_id(file_path, notion_id) do
-    update_file(file_path, %{notion_id: notion_id, notion_synced_at: DateTime.utc_now()})
+  @spec set_notion_id(String.t(), String.t(), String.t() | nil) ::
+          :ok | {:error, atom(), String.t()}
+  def set_notion_id(file_path, notion_id, body \\ nil) do
+    updates = %{notion_id: notion_id, notion_synced_at: DateTime.utc_now()}
+
+    updates =
+      case body do
+        nil -> updates
+        content -> Map.put(updates, :content_hash, compute_hash(content))
+      end
+
+    update_file(file_path, updates)
   end
 
   @doc """
-  Updates the sync timestamp in a file's frontmatter.
+  Updates the sync timestamp and content hash in a file's frontmatter.
   """
-  @spec update_synced_at(String.t()) :: :ok | {:error, atom(), String.t()}
-  def update_synced_at(file_path) do
-    update_file(file_path, %{notion_synced_at: DateTime.utc_now()})
+  @spec update_synced_at(String.t(), String.t() | nil) :: :ok | {:error, atom(), String.t()}
+  def update_synced_at(file_path, body \\ nil) do
+    updates = %{notion_synced_at: DateTime.utc_now()}
+
+    updates =
+      case body do
+        nil -> updates
+        content -> Map.put(updates, :content_hash, compute_hash(content))
+      end
+
+    update_file(file_path, updates)
+  end
+
+  @doc """
+  Computes SHA-256 hash of content for change detection.
+
+  Returns hash with "sha256:" prefix for future extensibility.
+
+  ## Examples
+
+      iex> Frontmatter.compute_hash("Hello world")
+      "sha256:64ec88ca00b268e5ba1a35678a1b5316d212f4f366b2477232534a8aeca37f3c"
+  """
+  @spec compute_hash(String.t()) :: String.t()
+  def compute_hash(content) do
+    hash =
+      :crypto.hash(:sha256, content)
+      |> Base.encode16(case: :lower)
+
+    "sha256:#{hash}"
+  end
+
+  @doc """
+  Checks if content has changed since last sync.
+
+  Returns true if content differs from stored hash, or if no hash is stored.
+
+  ## Examples
+
+      iex> stored = Frontmatter.compute_hash("old content")
+      iex> Frontmatter.content_changed?("new content", stored)
+      true
+
+      iex> stored = Frontmatter.compute_hash("same")
+      iex> Frontmatter.content_changed?("same", stored)
+      false
+  """
+  @spec content_changed?(String.t(), String.t() | nil) :: boolean()
+  def content_changed?(_current_content, nil), do: true
+
+  def content_changed?(current_content, stored_hash) do
+    compute_hash(current_content) != stored_hash
   end
 
   @doc """
@@ -120,26 +181,41 @@ defmodule ArcaNotionex.Frontmatter do
   @spec ensure_frontmatter(String.t()) ::
           :ok | {:already_has_title, String.t()} | {:error, atom(), String.t()}
   def ensure_frontmatter(file_path) do
-    case File.read(file_path) do
-      {:ok, content} ->
-        case parse(content) do
-          {:ok, %FrontmatterSchema{title: title}, _body} when is_binary(title) and title != "" ->
-            {:already_has_title, title}
-
-          {:ok, frontmatter, body} ->
-            title = extract_title_from_content(body) || derive_title_from_path(file_path)
-            updated = %{frontmatter | title: title}
-            new_content = serialize(updated) <> body
-            File.write(file_path, new_content)
-
-          {:error, type, msg} ->
-            {:error, type, msg}
-        end
-
-      {:error, reason} ->
-        {:error, :file_error, "Failed to read file: #{reason}"}
-    end
+    file_path
+    |> File.read()
+    |> handle_file_read(file_path)
   end
+
+  defp handle_file_read({:ok, content}, file_path) do
+    content
+    |> parse()
+    |> handle_parsed_content(file_path)
+  end
+
+  defp handle_file_read({:error, reason}, _file_path) do
+    {:error, :file_error, "Failed to read file: #{reason}"}
+  end
+
+  defp handle_parsed_content({:ok, %FrontmatterSchema{title: title}, _body}, _file_path)
+       when is_binary(title) and title != "" and title != "Index" do
+    {:already_has_title, title}
+  end
+
+  defp handle_parsed_content({:ok, frontmatter, body}, file_path) do
+    derived_title = derive_title_from_path(file_path)
+    title = select_title(extract_title_from_content(body), derived_title)
+    updated = %{frontmatter | title: title}
+    new_content = serialize(updated) <> body
+    File.write(file_path, new_content)
+  end
+
+  defp handle_parsed_content({:error, type, msg}, _file_path) do
+    {:error, type, msg}
+  end
+
+  defp select_title(nil, derived), do: derived
+  defp select_title("Index", derived), do: derived
+  defp select_title(heading, _derived), do: heading
 
   @doc """
   Ensures frontmatter for all markdown files in a directory.
@@ -158,6 +234,43 @@ defmodule ArcaNotionex.Frontmatter do
     end)
   end
 
+  @doc """
+  Derives a title from file path with smart handling for index.md files.
+
+  - Regular files: humanize filename (my-doc.md -> "My Doc")
+  - index.md: use parent directory name (arch/index.md -> "Arch")
+  - Root index.md: keeps "Index"
+
+  ## Examples
+
+      iex> Frontmatter.derive_title_from_path("docs/architecture/index.md")
+      "Architecture"
+
+      iex> Frontmatter.derive_title_from_path("index.md")
+      "Index"
+
+      iex> Frontmatter.derive_title_from_path("my-great-doc.md")
+      "My Great Doc"
+  """
+  @spec derive_title_from_path(String.t()) :: String.t()
+  def derive_title_from_path(file_path) do
+    file_path
+    |> Path.basename(".md")
+    |> derive_title_from_basename(file_path)
+  end
+
+  defp derive_title_from_basename("index", file_path) do
+    file_path
+    |> Path.dirname()
+    |> Path.basename()
+    |> derive_title_for_index()
+  end
+
+  defp derive_title_from_basename(basename, _file_path), do: humanize_name(basename)
+
+  defp derive_title_for_index("."), do: "Index"
+  defp derive_title_for_index(parent_dir), do: humanize_name(parent_dir)
+
   defp extract_title_from_content(body) do
     case Regex.run(~r/^#\s+(.+)$/m, body) do
       [_, title] -> String.trim(title)
@@ -165,9 +278,8 @@ defmodule ArcaNotionex.Frontmatter do
     end
   end
 
-  defp derive_title_from_path(file_path) do
-    file_path
-    |> Path.basename(".md")
+  defp humanize_name(name) do
+    name
     |> String.replace(~r/[-_]/, " ")
     |> String.split()
     |> Enum.map(&String.capitalize/1)
@@ -202,7 +314,8 @@ defmodule ArcaNotionex.Frontmatter do
     %FrontmatterSchema{
       title: Map.get(yaml_map, "title"),
       notion_id: Map.get(yaml_map, "notion_id"),
-      notion_synced_at: parse_datetime(Map.get(yaml_map, "notion_synced_at"))
+      notion_synced_at: parse_datetime(Map.get(yaml_map, "notion_synced_at")),
+      content_hash: Map.get(yaml_map, "content_hash")
     }
   end
 
@@ -219,19 +332,18 @@ defmodule ArcaNotionex.Frontmatter do
   defp parse_datetime(_), do: nil
 
   defp update_frontmatter(%FrontmatterSchema{} = fm, updates) do
-    updates
-    |> Enum.reduce(fm, fn {key, value}, acc ->
-      case key do
-        :title -> %{acc | title: value}
-        :notion_id -> %{acc | notion_id: value}
-        :notion_synced_at -> %{acc | notion_synced_at: value}
-        "title" -> %{acc | title: value}
-        "notion_id" -> %{acc | notion_id: value}
-        "notion_synced_at" -> %{acc | notion_synced_at: value}
-        _ -> acc
-      end
-    end)
+    Enum.reduce(updates, fm, &apply_update/2)
   end
+
+  defp apply_update({:title, value}, acc), do: %{acc | title: value}
+  defp apply_update({:notion_id, value}, acc), do: %{acc | notion_id: value}
+  defp apply_update({:notion_synced_at, value}, acc), do: %{acc | notion_synced_at: value}
+  defp apply_update({:content_hash, value}, acc), do: %{acc | content_hash: value}
+  defp apply_update({"title", value}, acc), do: %{acc | title: value}
+  defp apply_update({"notion_id", value}, acc), do: %{acc | notion_id: value}
+  defp apply_update({"notion_synced_at", value}, acc), do: %{acc | notion_synced_at: value}
+  defp apply_update({"content_hash", value}, acc), do: %{acc | content_hash: value}
+  defp apply_update({_key, _value}, acc), do: acc
 
   defp format_value(%DateTime{} = dt), do: "\"#{DateTime.to_iso8601(dt)}\""
   defp format_value(str) when is_binary(str), do: "\"#{escape_yaml_string(str)}\""

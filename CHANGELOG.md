@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2026-01-08
+
+### Fixed
+
+- **Directory flattening bug** - Fixed silent fallback in `create_directory_pages` that caused all pages to be created flat under root instead of nested hierarchy. Now properly propagates errors with `Enum.reduce_while`.
+
+- **Duplicate "Index" titles** - Smart title derivation for `index.md` files now uses parent directory name (e.g., `architecture/index.md` becomes "Architecture"). Added per-directory title uniqueness validation.
+
+### Added
+
+- **Content hash tracking** - Added `content_hash` field to frontmatter schema with SHA-256 hashing for future incremental sync support.
+
+- **Title validation** - `validate_unique_titles/2` checks for duplicate titles within each directory before sync.
+
+### Changed
+
+- Refactored `sync.ex` and `frontmatter.ex` to use pattern-matched functions instead of if/case/cond statements.
+
+### Tests
+
+- Added `sync_test.exs` with 24 new tests for directory discovery, sync operations, and title validation.
+- Added 14 new tests to `frontmatter_test.exs` for title derivation and hash functions.
+- Total: 182 tests, 0 failures.
+
 ## [0.1.3] - 2026-01-08
 
 ### Changed

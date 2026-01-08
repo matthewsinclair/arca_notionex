@@ -52,6 +52,7 @@ defmodule ArcaNotionex.Sync do
     sync_opts = [dry_run: dry_run, link_map: link_map, base_dir: dir_path]
 
     with {:ok, files} <- discover_files(dir_path),
+         :ok <- validate_unique_titles(files, dir_path),
          {:ok, result} <- sync_files(files, dir_path, root_page_id, sync_opts) do
       {:ok, result}
     end
@@ -95,19 +96,29 @@ defmodule ArcaNotionex.Sync do
       blocks = List.flatten(block_chunks)
       title = frontmatter.title || derive_title(file_path)
 
-      cond do
-        dry_run ->
-          action = if frontmatter.notion_id, do: :updated, else: :created
-          {:ok, action, "[dry-run] Would #{action}: #{title}"}
-
-        frontmatter.notion_id != nil ->
-          update_existing_page(file_path, frontmatter.notion_id, blocks)
-
-        true ->
-          create_new_page(file_path, parent_page_id, title, blocks)
-      end
+      sync_action(file_path, parent_page_id, title, blocks, body, frontmatter, dry_run)
     end
   end
+
+  # Dry-run mode: preview what would happen
+  defp sync_action(_file_path, _parent_id, title, _blocks, _body, frontmatter, true = _dry_run) do
+    action = select_action(frontmatter.notion_id)
+    {:ok, action, "[dry-run] Would #{action}: #{title}"}
+  end
+
+  # Live mode: existing page (has notion_id) - update it
+  defp sync_action(file_path, _parent_id, _title, blocks, body, %{notion_id: notion_id}, false)
+       when is_binary(notion_id) do
+    update_existing_page(file_path, notion_id, blocks, body)
+  end
+
+  # Live mode: new page (no notion_id) - create it
+  defp sync_action(file_path, parent_id, title, blocks, body, _frontmatter, false) do
+    create_new_page(file_path, parent_id, title, blocks, body)
+  end
+
+  defp select_action(nil), do: :created
+  defp select_action(_notion_id), do: :updated
 
   # File discovery
 
@@ -130,6 +141,84 @@ defmodule ArcaNotionex.Sync do
     end
   end
 
+  @doc """
+  Validates that titles are unique within each directory.
+
+  Reads frontmatter from each file to determine its effective title,
+  then checks for duplicates within each parent directory.
+
+  Cross-directory duplicates are allowed (different contexts).
+
+  ## Examples
+
+      iex> Sync.validate_unique_titles([file1, file2], "/base")
+      :ok
+
+      iex> Sync.validate_unique_titles([dupe1, dupe2], "/base")
+      {:error, :duplicate_titles, "..."}
+  """
+  @spec validate_unique_titles([FileEntry.t()], String.t()) :: :ok | {:error, atom(), String.t()}
+  def validate_unique_titles(files, _base_dir) do
+    # Build list of {parent_path, title, relative_path} tuples
+    file_titles =
+      files
+      |> Enum.map(fn file ->
+        title = get_file_title(file.path, file.relative_path)
+        {file.parent_path, title, file.relative_path}
+      end)
+
+    # Group by parent directory and find duplicates within each
+    duplicates =
+      file_titles
+      |> Enum.group_by(fn {parent, _title, _path} -> parent end)
+      |> Enum.flat_map(fn {parent_path, entries} ->
+        # Within each directory, find duplicate titles
+        entries
+        |> Enum.group_by(fn {_parent, title, _path} -> title end)
+        |> Enum.filter(fn {_title, entries} -> length(entries) > 1 end)
+        |> Enum.map(fn {title, entries} ->
+          paths = Enum.map(entries, fn {_, _, path} -> path end) |> Enum.join(", ")
+          dir_name = parent_path || "(root)"
+          "In '#{dir_name}': duplicate title '#{title}' in files: #{paths}"
+        end)
+      end)
+
+    case duplicates do
+      [] -> :ok
+      errors -> {:error, :duplicate_titles, Enum.join(errors, "\n")}
+    end
+  end
+
+  # Gets the effective title for a file by reading its frontmatter
+  defp get_file_title(file_path, relative_path) do
+    file_path
+    |> File.read()
+    |> extract_title_from_file(relative_path)
+  end
+
+  defp extract_title_from_file({:ok, content}, relative_path) do
+    content
+    |> Frontmatter.parse()
+    |> extract_title_from_parsed(relative_path)
+  end
+
+  defp extract_title_from_file({:error, _}, relative_path) do
+    Frontmatter.derive_title_from_path(relative_path)
+  end
+
+  defp extract_title_from_parsed({:ok, %{title: title}, _body}, _relative_path)
+       when is_binary(title) and title != "" and title != "Index" do
+    title
+  end
+
+  defp extract_title_from_parsed({:ok, _frontmatter, _body}, relative_path) do
+    Frontmatter.derive_title_from_path(relative_path)
+  end
+
+  defp extract_title_from_parsed({:error, _, _}, relative_path) do
+    Frontmatter.derive_title_from_path(relative_path)
+  end
+
   # Private functions
 
   defp sync_files(files, base_path, root_page_id, sync_opts) do
@@ -141,20 +230,25 @@ defmodule ArcaNotionex.Sync do
     {final_result, _final_map} =
       Enum.reduce(files, {result, page_map}, fn file, {res, pmap} ->
         # Ensure parent directory pages exist
-        {pmap, parent_id} = ensure_parent_pages(file, pmap, root_page_id, base_path, dry_run)
+        case ensure_parent_pages(file, pmap, root_page_id, base_path, dry_run) do
+          {:ok, updated_pmap, parent_id} ->
+            # Sync the file with all options (dry_run, link_map, base_dir)
+            case sync_file(file.path, parent_id, sync_opts) do
+              {:ok, :created, _} ->
+                {SyncResult.add_created(res, file.relative_path), updated_pmap}
 
-        # Sync the file with all options (dry_run, link_map, base_dir)
-        case sync_file(file.path, parent_id, sync_opts) do
-          {:ok, :created, _} ->
-            {SyncResult.add_created(res, file.relative_path), pmap}
+              {:ok, :updated, _} ->
+                {SyncResult.add_updated(res, file.relative_path), updated_pmap}
 
-          {:ok, :updated, _} ->
-            {SyncResult.add_updated(res, file.relative_path), pmap}
+              {:ok, :skipped, _} ->
+                {SyncResult.add_skipped(res, file.relative_path), updated_pmap}
 
-          {:ok, :skipped, _} ->
-            {SyncResult.add_skipped(res, file.relative_path), pmap}
+              {:error, _type, reason} ->
+                {SyncResult.add_error(res, file.relative_path, reason), updated_pmap}
+            end
 
           {:error, _type, reason} ->
+            # Directory creation failed - add error and keep old page_map
             {SyncResult.add_error(res, file.relative_path, reason), pmap}
         end
       end)
@@ -169,7 +263,7 @@ defmodule ArcaNotionex.Sync do
          _base_path,
          _dry_run
        ) do
-    {page_map, root_page_id}
+    {:ok, page_map, root_page_id}
   end
 
   defp ensure_parent_pages(
@@ -180,7 +274,7 @@ defmodule ArcaNotionex.Sync do
          dry_run
        ) do
     if Map.has_key?(page_map, parent_path) do
-      {page_map, Map.get(page_map, parent_path)}
+      {:ok, page_map, Map.get(page_map, parent_path)}
     else
       # Need to create directory pages
       create_directory_pages(parent_path, page_map, root_page_id, base_path, dry_run)
@@ -190,37 +284,53 @@ defmodule ArcaNotionex.Sync do
   defp create_directory_pages(dir_path, page_map, root_page_id, _base_path, dry_run) do
     parts = Path.split(dir_path)
 
-    Enum.reduce(parts, {page_map, root_page_id, ""}, fn part, {pmap, parent_id, current_path} ->
-      new_path = if current_path == "", do: part, else: Path.join(current_path, part)
+    result =
+      Enum.reduce_while(
+        parts,
+        {:ok, page_map, root_page_id, ""},
+        fn part, {:ok, pmap, parent_id, current_path} ->
+          new_path = if current_path == "", do: part, else: Path.join(current_path, part)
 
-      if Map.has_key?(pmap, new_path) do
-        {pmap, Map.get(pmap, new_path), new_path}
-      else
-        # Create directory page
-        dir_title = humanize_dirname(part)
-
-        page_id =
-          if dry_run do
-            "dry-run-#{new_path}"
+          if Map.has_key?(pmap, new_path) do
+            {:cont, {:ok, pmap, Map.get(pmap, new_path), new_path}}
           else
-            case Client.create_page(parent_id, dir_title, []) do
-              {:ok, response} -> response.id
-              {:error, _, _} -> parent_id
+            # Create directory page
+            dir_title = humanize_dirname(part)
+
+            case create_directory_page(parent_id, dir_title, dry_run) do
+              {:ok, page_id} ->
+                new_map = Map.put(pmap, new_path, page_id)
+                {:cont, {:ok, new_map, page_id, new_path}}
+
+              {:error, type, reason} ->
+                {:halt, {:error, type, "Failed to create directory '#{new_path}': #{reason}"}}
             end
           end
+        end
+      )
 
-        new_map = Map.put(pmap, new_path, page_id)
-        {new_map, page_id, new_path}
-      end
-    end)
-    |> then(fn {pmap, page_id, _path} -> {pmap, page_id} end)
+    case result do
+      {:ok, pmap, page_id, _path} -> {:ok, pmap, page_id}
+      {:error, type, reason} -> {:error, type, reason}
+    end
   end
 
-  defp create_new_page(file_path, parent_page_id, title, blocks) do
+  defp create_directory_page(_parent_id, _title, true = _dry_run) do
+    {:ok, "dry-run-#{:erlang.unique_integer([:positive])}"}
+  end
+
+  defp create_directory_page(parent_id, title, false = _dry_run) do
+    case Client.create_page(parent_id, title, []) do
+      {:ok, response} -> {:ok, response.id}
+      {:error, type, reason} -> {:error, type, reason}
+    end
+  end
+
+  defp create_new_page(file_path, parent_page_id, title, blocks, body) do
     case Client.create_page(parent_page_id, title, blocks) do
       {:ok, response} ->
-        # Update frontmatter with notion_id
-        Frontmatter.set_notion_id(file_path, response.id)
+        # Update frontmatter with notion_id and content hash
+        Frontmatter.set_notion_id(file_path, response.id, body)
         {:ok, :created, response.id}
 
       {:error, type, reason} ->
@@ -228,10 +338,10 @@ defmodule ArcaNotionex.Sync do
     end
   end
 
-  defp update_existing_page(file_path, notion_id, blocks) do
+  defp update_existing_page(file_path, notion_id, blocks, body) do
     case Client.update_page_blocks(notion_id, blocks) do
       {:ok, _} ->
-        Frontmatter.update_synced_at(file_path)
+        Frontmatter.update_synced_at(file_path, body)
         {:ok, :updated, notion_id}
 
       {:error, type, reason} ->
@@ -240,9 +350,7 @@ defmodule ArcaNotionex.Sync do
   end
 
   defp derive_title(file_path) do
-    file_path
-    |> Path.basename(".md")
-    |> humanize_dirname()
+    Frontmatter.derive_title_from_path(file_path)
   end
 
   defp humanize_dirname(name) do
