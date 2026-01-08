@@ -2,6 +2,7 @@ defmodule ArcaNotionex.AstToBlocksTest do
   use ExUnit.Case, async: true
 
   alias ArcaNotionex.AstToBlocks
+  alias ArcaNotionex.LinkMap
   alias ArcaNotionex.Schemas.{NotionBlock, RichText}
 
   describe "convert/1" do
@@ -247,6 +248,147 @@ defmodule ArcaNotionex.AstToBlocksTest do
       ast = [{"em", [], ["italic"], %{}}]
       result = AstToBlocks.children_to_rich_text(ast)
       assert [%RichText{content: "italic", italic: true}] = result
+    end
+  end
+
+  describe "convert/2 with link_map option" do
+    @test_dir "test/fixtures/ast_link_test"
+
+    setup do
+      File.mkdir_p!(@test_dir)
+
+      # Create test files with notion_ids
+      File.write!(Path.join(@test_dir, "overview.md"), """
+      ---
+      title: Overview
+      notion_id: abc123
+      ---
+      # Overview
+      """)
+
+      File.write!(Path.join(@test_dir, "guide.md"), """
+      ---
+      title: Guide
+      notion_id: def456
+      ---
+      # Guide
+      """)
+
+      {:ok, link_map} = LinkMap.build(@test_dir)
+
+      on_exit(fn ->
+        File.rm_rf!(@test_dir)
+      end)
+
+      {:ok, link_map: link_map}
+    end
+
+    test "resolves internal .md links to Notion URLs", %{link_map: link_map} do
+      markdown = "Read the [overview](overview.md) for details."
+
+      {:ok, [[block]]} = AstToBlocks.convert(markdown, link_map: link_map)
+
+      link_rt = Enum.find(block.rich_text, fn rt -> rt.content == "overview" end)
+      assert link_rt.link == "https://notion.so/abc123"
+    end
+
+    test "resolves links with anchors", %{link_map: link_map} do
+      markdown = "See [section](overview.md#intro)."
+
+      {:ok, [[block]]} = AstToBlocks.convert(markdown, link_map: link_map)
+
+      link_rt = Enum.find(block.rich_text, fn rt -> rt.content == "section" end)
+      assert link_rt.link == "https://notion.so/abc123#intro"
+    end
+
+    test "preserves external links", %{link_map: link_map} do
+      markdown = "Visit [Google](https://google.com)."
+
+      {:ok, [[block]]} = AstToBlocks.convert(markdown, link_map: link_map)
+
+      link_rt = Enum.find(block.rich_text, fn rt -> rt.content == "Google" end)
+      assert link_rt.link == "https://google.com"
+    end
+
+    test "preserves unresolvable internal links", %{link_map: link_map} do
+      markdown = "See [other](unknown.md)."
+
+      {:ok, [[block]]} = AstToBlocks.convert(markdown, link_map: link_map)
+
+      link_rt = Enum.find(block.rich_text, fn rt -> rt.content == "other" end)
+      assert link_rt.link == "unknown.md"
+    end
+
+    test "resolves links in headings", %{link_map: link_map} do
+      markdown = "# Check [guide](guide.md)"
+
+      {:ok, [[block]]} = AstToBlocks.convert(markdown, link_map: link_map)
+
+      assert block.type == :heading_1
+      link_rt = Enum.find(block.rich_text, fn rt -> rt.content == "guide" end)
+      assert link_rt.link == "https://notion.so/def456"
+    end
+
+    test "resolves links in list items", %{link_map: link_map} do
+      markdown = """
+      - See [overview](overview.md)
+      - See [guide](guide.md)
+      """
+
+      {:ok, [blocks]} = AstToBlocks.convert(markdown, link_map: link_map)
+
+      assert length(blocks) == 2
+
+      [item1, item2] = blocks
+      link1 = Enum.find(item1.rich_text, fn rt -> rt.link != nil end)
+      link2 = Enum.find(item2.rich_text, fn rt -> rt.link != nil end)
+
+      assert link1.link == "https://notion.so/abc123"
+      assert link2.link == "https://notion.so/def456"
+    end
+
+    test "resolves links in blockquotes", %{link_map: link_map} do
+      markdown = "> Read [overview](overview.md)"
+
+      {:ok, [[block]]} = AstToBlocks.convert(markdown, link_map: link_map)
+
+      assert block.type == :quote
+      link_rt = Enum.find(block.rich_text, fn rt -> rt.content == "overview" end)
+      assert link_rt.link == "https://notion.so/abc123"
+    end
+
+    test "handles current_file for relative path resolution", %{link_map: _link_map} do
+      # Simulate being in a subdirectory
+      File.mkdir_p!(Path.join(@test_dir, "docs"))
+
+      File.write!(Path.join(@test_dir, "docs/child.md"), """
+      ---
+      title: Child
+      notion_id: child-id
+      ---
+      # Child
+      """)
+
+      # Rebuild link map with the new file
+      {:ok, link_map} = LinkMap.build(@test_dir)
+
+      # Link from docs/child.md to ../overview.md
+      markdown = "See [overview](../overview.md)"
+
+      {:ok, [[block]]} =
+        AstToBlocks.convert(markdown, link_map: link_map, current_file: "docs/child.md")
+
+      link_rt = Enum.find(block.rich_text, fn rt -> rt.content == "overview" end)
+      assert link_rt.link == "https://notion.so/abc123"
+    end
+
+    test "converts without link_map (no resolution)" do
+      markdown = "See [overview](overview.md)."
+
+      {:ok, [[block]]} = AstToBlocks.convert(markdown)
+
+      link_rt = Enum.find(block.rich_text, fn rt -> rt.content == "overview" end)
+      assert link_rt.link == "overview.md"
     end
   end
 end

@@ -116,8 +116,8 @@ defmodule ArcaNotionex.LinkMap do
       String.starts_with?(href, "#") ->
         href
 
-      # Internal .md link - try to resolve
-      String.ends_with?(href, ".md") or String.contains?(href, ".md#") ->
+      # Internal .md link - try to resolve (case insensitive)
+      is_markdown_link?(href) ->
         {path, anchor} = split_anchor(href)
         resolved_path = resolve_relative_path(path, current_file)
 
@@ -168,7 +168,8 @@ defmodule ArcaNotionex.LinkMap do
          {:ok, frontmatter, _body} <- Frontmatter.parse(content),
          notion_id when is_binary(notion_id) <- Map.get(frontmatter, :notion_id) do
       relative_path = Path.relative_to(file_path, base_dir)
-      {relative_path, notion_id}
+      # Store normalized path as key for case-insensitive lookup
+      {normalize_path(relative_path), notion_id}
     else
       _ -> nil
     end
@@ -191,7 +192,29 @@ defmodule ArcaNotionex.LinkMap do
 
   defp resolve_relative_path(path, current_file) do
     current_dir = Path.dirname(current_file)
-    Path.join(current_dir, path) |> Path.expand() |> normalize_path()
+    joined = Path.join(current_dir, path)
+    # Normalize the path to collapse .. segments
+    collapsed = collapse_path(joined)
+    normalize_path(collapsed)
+  end
+
+  # Collapse .. and . segments in a path without converting to absolute
+  defp collapse_path(path) do
+    path
+    |> Path.split()
+    |> Enum.reduce([], fn
+      "..", [_ | rest] -> rest
+      "..", [] -> []
+      ".", acc -> acc
+      segment, acc -> [segment | acc]
+    end)
+    |> Enum.reverse()
+    |> Path.join()
+  end
+
+  defp is_markdown_link?(href) do
+    lower = String.downcase(href)
+    String.ends_with?(lower, ".md") or String.contains?(lower, ".md#")
   end
 
   defp is_notion_url?(url) do

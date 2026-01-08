@@ -1,11 +1,15 @@
 ---
-verblock: "08 Jan 2026:v0.1: matts - Initial version"
+verblock: "08 Jan 2026:v0.2: matts - Implementation complete"
 intent_version: 2.2.0
 status: WIP
 created: 20260108
 completed:
 ---
 # ST0007: Fix md links in Notion with two-pass processing
+
+## Objective
+
+Resolve internal markdown links to Notion page URLs during sync.
 
 ## Problem
 
@@ -18,24 +22,14 @@ See [System Overview](system-overview.md) for details.
 ```
 
 **Current behavior:**
-
 - Link becomes `https://www.notion.so/system-overview.md` (broken)
 
 **Expected behavior:**
-
 - Link becomes `https://www.notion.so/abc123...` (actual Notion page ID)
 
-## Root Cause
+## Solution: Two-Pass Sync with `--relink`
 
-Chicken-and-egg problem:
-
-1. First sync creates pages and stores `notion_id` in each file's frontmatter
-2. But during that first sync, we don't know sibling pages' IDs yet
-3. Links are converted literally, resulting in broken `.md` URLs
-
-## Proposed Solution: Two-Pass Sync with `--relink`
-
-### Usage
+### CLI Usage
 
 ```bash
 # First sync: creates pages (links will be broken)
@@ -45,192 +39,66 @@ notionex sync --dir ./docs --root-page abc123
 notionex sync --dir ./docs --root-page abc123 --relink
 ```
 
-## Implementation
+## Implementation Summary
 
-### 1. Build Link Map (new module)
+### Modules Modified
 
-```elixir
-defmodule ArcaNotionex.LinkMap do
-  @doc """
-  Builds a map of relative markdown paths to Notion page IDs
-  by reading frontmatter from all files in the directory.
-  """
-  def build(dir) do
-    dir
-    |> find_markdown_files()
-    |> Enum.map(&extract_mapping(&1, dir))
-    |> Enum.reject(&is_nil/1)
-    |> Map.new()
-  end
+| Module | Changes |
+|--------|---------|
+| `lib/arca_notionex/link_map.ex` | Shared module for ST0006+ST0007 (already created in ST0006) |
+| `lib/arca_notionex/ast_to_blocks.ex` | Added `link_map` and `current_file` options |
+| `lib/arca_notionex/commands/sync_command.ex` | Added `--relink` flag |
+| `lib/arca_notionex/sync.ex` | Build and pass LinkMap when relink=true |
+| `scripts/completions/completions.txt` | Added `--relink` |
 
-  defp find_markdown_files(dir) do
-    Path.wildcard(Path.join(dir, "**/*.md"))
-  end
+### Key Changes
 
-  defp extract_mapping(file_path, base_dir) do
-    with {:ok, content} <- File.read(file_path),
-         {:ok, %{frontmatter: %{"notion_id" => notion_id}}} <- Frontmatter.parse(content) do
-      relative_path = Path.relative_to(file_path, base_dir)
-      {relative_path, notion_id}
-    else
-      _ -> nil
-    end
-  end
-end
-```
+1. **AstToBlocks.convert/2** now accepts options:
+   - `:link_map` - LinkMap for resolving internal .md links
+   - `:current_file` - Current file path for resolving relative links
 
-**Example output:**
+2. **Link Resolution Flow:**
+   ```
+   [link](other.md)
+   → resolve_link() checks if .md file
+   → looks up in LinkMap.path_to_notion_id()
+   → returns https://notion.so/<notion_id>
+   ```
 
-```elixir
-%{
-  "index.md" => "abc123-def456",
-  "architecture/system-overview.md" => "789xyz-...",
-  "architecture/data-storage.md" => "..."
-}
-```
+3. **Sync Module:**
+   - When `--relink` is passed, builds LinkMap from directory
+   - Passes `link_map` and `current_file` to AstToBlocks.convert
 
-### 2. Modify AstToBlocks to Accept Link Map
+### Features
 
-```elixir
-defmodule ArcaNotionex.AstToBlocks do
-  # Add link_map as optional parameter (default empty map)
-  def convert(ast, opts \\ []) do
-    link_map = Keyword.get(opts, :link_map, %{})
-    convert_nodes(ast, link_map)
-  end
+- **Case-insensitive matching**: `OVERVIEW.MD` resolves to `overview.md`
+- **Relative path support**: `../other.md` resolved from current file location
+- **Anchor preservation**: `file.md#section` → `https://notion.so/id#section`
+- **External link preservation**: HTTP/HTTPS links unchanged
+- **Bidirectional**: Same LinkMap module used by ST0006 for reverse resolution
 
-  # When converting a link node
-  defp convert_link(href, text, link_map) do
-    resolved_href = resolve_link(href, link_map)
-    # ... create Notion link block with resolved_href
-  end
+### Relationship with ST0006
 
-  defp resolve_link(href, link_map) do
-    cond do
-      # External link - keep as-is
-      String.starts_with?(href, "http") ->
-        href
+Both ST0006 (pull) and ST0007 (sync --relink) share the `LinkMap` module:
 
-      # Internal .md link - try to resolve
-      String.ends_with?(href, ".md") ->
-        case Map.get(link_map, normalize_path(href)) do
-          nil -> href  # Not found, keep original (will be broken)
-          notion_id -> "https://notion.so/#{notion_id}"
-        end
+| Direction | Usage |
+|-----------|-------|
+| Forward (ST0007) | path → notion_id: `[link](file.md)` → Notion URL |
+| Reverse (ST0006) | notion_id → path: Notion URL → `[link](file.md)` |
 
-      # Anchor or other - keep as-is
-      true ->
-        href
-    end
-  end
+### Tests
 
-  # Handle relative paths: "./foo.md", "../bar.md", "foo.md"
-  defp normalize_path(href) do
-    href
-    |> String.trim_leading("./")
-    # May need more sophisticated path resolution for "../" references
-  end
-end
-```
+- 27 new tests in `link_map_test.exs`
+- 10 new tests in `ast_to_blocks_test.exs` (link resolution describe block)
+- 7 new tests in `blocks_to_markdown_test.exs` (reverse resolution)
+- Total: 145 tests passing
 
-### 3. Modify Sync to Support `--relink`
-
-```elixir
-def sync(dir, root_page_id, opts \\ []) do
-  relink? = Keyword.get(opts, :relink, false)
-
-  link_map = if relink? do
-    LinkMap.build(dir)
-  else
-    %{}
-  end
-
-  # Pass link_map to the conversion pipeline
-  files
-  |> Enum.each(fn file ->
-    content = File.read!(file)
-    {frontmatter, markdown} = Frontmatter.parse(content)
-    ast = EarmarkParser.as_ast!(markdown)
-    blocks = AstToBlocks.convert(ast, link_map: link_map)
-    # ... sync to Notion
-  end)
-end
-```
-
-### 4. Add CLI Flag
-
-In `NotionexSyncCommand`:
-
-```elixir
-config :"notionex.sync",
-  # ... existing config ...
-  flags: [
-    relink: [short: "-r", long: "--relink", help: "Resolve internal .md links to Notion pages"]
-  ]
-```
-
-## Edge Cases to Handle
-
-1. **Relative paths with `../`**
-   - `[Ops](../operations/index.md)` from `architecture/index.md`
-   - Need to resolve relative to current file's location
-
-2. **Anchor links**
-   - `[Section](#section-name)` - keep as-is (Notion handles these)
-   - `[Other Page](other.md#section)` - resolve page, keep anchor
-
-3. **Missing targets**
-   - Link to file that doesn't exist or wasn't synced
-   - Options: keep broken link, remove link (keep text), log warning
-
-4. **Case sensitivity**
-   - `System-Overview.md` vs `system-overview.md`
-   - Normalize to lowercase for matching?
-
-## Testing
-
-```elixir
-# test/link_map_test.exs
-test "builds link map from frontmatter" do
-  # Create temp files with frontmatter
-  # Verify map is built correctly
-end
-
-# test/ast_to_blocks_test.exs
-test "resolves internal .md links" do
-  link_map = %{"other.md" => "notion-id-123"}
-  ast = [{"a", [{"href", "other.md"}], ["Other Page"], %{}}]
-
-  blocks = AstToBlocks.convert(ast, link_map: link_map)
-
-  # Assert link URL is https://notion.so/notion-id-123
-end
-
-test "preserves external links" do
-  ast = [{"a", [{"href", "https://example.com"}], ["Example"], %{}}]
-  blocks = AstToBlocks.convert(ast, link_map: %{})
-
-  # Assert link URL is unchanged
-end
-```
-
-## Workflow After Implementation
+## Workflow
 
 ```bash
-# 1. Prepare files (add frontmatter)
-notionex prepare --dir ./a3-engineering
+# 1. First sync - creates pages, populates notion_ids in frontmatter
+notionex sync --dir ./docs --root-page abc123
 
-# 2. First sync (creates pages, links broken)
-notionex sync --dir ./a3-engineering --root-page abc123
-
-# 3. Second sync with relink (fixes links)
-notionex sync --dir ./a3-engineering --root-page abc123 --relink
-
-# Or combine into single command with auto-relink:
-notionex sync --dir ./a3-engineering --root-page abc123 --auto-relink
-# (Does two passes internally)
+# 2. Second sync with relink - resolves internal links
+notionex sync --dir ./docs --root-page abc123 --relink
 ```
-
-## Priority
-
-**High** - Without this, internal documentation links are all broken, significantly reducing the usefulness of the Notion sync.

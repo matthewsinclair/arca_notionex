@@ -9,12 +9,13 @@ defmodule ArcaNotionex.Sync do
   - Frontmatter updates after sync
   """
 
-  alias ArcaNotionex.{Frontmatter, AstToBlocks, Client}
+  alias ArcaNotionex.{Frontmatter, AstToBlocks, Client, LinkMap}
   alias ArcaNotionex.Schemas.{FileEntry, SyncResult}
 
   @type sync_opts :: [
           root_page_id: String.t(),
-          dry_run: boolean()
+          dry_run: boolean(),
+          relink: boolean()
         ]
 
   @doc """
@@ -24,6 +25,7 @@ defmodule ArcaNotionex.Sync do
 
   - `:root_page_id` - Required. The Notion page ID to sync under.
   - `:dry_run` - If true, preview changes without modifying anything.
+  - `:relink` - If true, resolve internal .md links to Notion URLs.
 
   ## Returns
 
@@ -34,24 +36,62 @@ defmodule ArcaNotionex.Sync do
   def sync_directory(dir_path, opts) do
     root_page_id = Keyword.fetch!(opts, :root_page_id)
     dry_run = Keyword.get(opts, :dry_run, false)
+    relink = Keyword.get(opts, :relink, false)
+
+    # Build link map when relink is enabled
+    link_map =
+      if relink do
+        case LinkMap.build(dir_path) do
+          {:ok, map} -> map
+          {:error, _, _} -> LinkMap.empty()
+        end
+      else
+        nil
+      end
+
+    sync_opts = [dry_run: dry_run, link_map: link_map, base_dir: dir_path]
 
     with {:ok, files} <- discover_files(dir_path),
-         {:ok, result} <- sync_files(files, dir_path, root_page_id, dry_run) do
+         {:ok, result} <- sync_files(files, dir_path, root_page_id, sync_opts) do
       {:ok, result}
     end
   end
 
   @doc """
   Syncs a single markdown file to Notion.
+
+  ## Options
+
+  - `:dry_run` - Preview without making changes
+  - `:link_map` - LinkMap for resolving internal .md links (requires :base_dir)
+  - `:base_dir` - Base directory for computing relative paths
   """
   @spec sync_file(String.t(), String.t(), keyword()) ::
           {:ok, :created | :updated | :skipped, String.t() | nil} | {:error, atom(), String.t()}
   def sync_file(file_path, parent_page_id, opts \\ []) do
     dry_run = Keyword.get(opts, :dry_run, false)
+    link_map = Keyword.get(opts, :link_map)
+    base_dir = Keyword.get(opts, :base_dir)
+
+    # Compute relative path for link resolution
+    current_file =
+      if base_dir do
+        Path.relative_to(file_path, base_dir)
+      else
+        file_path
+      end
+
+    # Build convert options
+    convert_opts =
+      if link_map do
+        [link_map: link_map, current_file: current_file]
+      else
+        []
+      end
 
     with {:ok, content} <- File.read(file_path),
          {:ok, frontmatter, body} <- Frontmatter.parse(content),
-         {:ok, block_chunks} <- AstToBlocks.convert(body) do
+         {:ok, block_chunks} <- AstToBlocks.convert(body, convert_opts) do
       blocks = List.flatten(block_chunks)
       title = frontmatter.title || derive_title(file_path)
 
@@ -92,18 +132,19 @@ defmodule ArcaNotionex.Sync do
 
   # Private functions
 
-  defp sync_files(files, base_path, root_page_id, dry_run) do
+  defp sync_files(files, base_path, root_page_id, sync_opts) do
     # Track directory -> page ID mapping
     page_map = %{"" => root_page_id}
     result = SyncResult.new()
+    dry_run = Keyword.get(sync_opts, :dry_run, false)
 
     {final_result, _final_map} =
       Enum.reduce(files, {result, page_map}, fn file, {res, pmap} ->
         # Ensure parent directory pages exist
         {pmap, parent_id} = ensure_parent_pages(file, pmap, root_page_id, base_path, dry_run)
 
-        # Sync the file
-        case sync_file(file.path, parent_id, dry_run: dry_run) do
+        # Sync the file with all options (dry_run, link_map, base_dir)
+        case sync_file(file.path, parent_id, sync_opts) do
           {:ok, :created, _} ->
             {SyncResult.add_created(res, file.relative_path), pmap}
 

@@ -2,6 +2,7 @@ defmodule ArcaNotionex.BlocksToMarkdownTest do
   use ExUnit.Case, async: true
 
   alias ArcaNotionex.BlocksToMarkdown
+  alias ArcaNotionex.LinkMap
   alias ArcaNotionex.Schemas.{NotionBlock, RichText}
 
   describe "convert/2" do
@@ -241,6 +242,115 @@ defmodule ArcaNotionex.BlocksToMarkdownTest do
 
       assert {:ok, markdown} = BlocksToMarkdown.convert(blocks)
       assert markdown == "Normal **bold** and *italic*\n"
+    end
+  end
+
+  describe "link_map option (reverse resolution)" do
+    @test_dir "test/fixtures/btm_link_test"
+
+    setup do
+      File.mkdir_p!(@test_dir)
+
+      File.write!(Path.join(@test_dir, "overview.md"), """
+      ---
+      title: Overview
+      notion_id: abc123
+      ---
+      # Overview
+      """)
+
+      File.write!(Path.join(@test_dir, "guide.md"), """
+      ---
+      title: Guide
+      notion_id: def456
+      ---
+      # Guide
+      """)
+
+      {:ok, link_map} = LinkMap.build(@test_dir)
+
+      on_exit(fn ->
+        File.rm_rf!(@test_dir)
+      end)
+
+      {:ok, link_map: link_map}
+    end
+
+    test "resolves Notion URLs to local paths", %{link_map: link_map} do
+      # Link with Notion URL
+      rt = %RichText{content: "overview", link: "https://notion.so/abc123"}
+      blocks = [NotionBlock.paragraph([rt])]
+
+      {:ok, markdown} = BlocksToMarkdown.convert(blocks, link_map: link_map)
+
+      assert markdown == "[overview](overview.md)\n"
+    end
+
+    test "resolves www.notion.so URLs", %{link_map: link_map} do
+      rt = %RichText{content: "guide", link: "https://www.notion.so/def456"}
+      blocks = [NotionBlock.paragraph([rt])]
+
+      {:ok, markdown} = BlocksToMarkdown.convert(blocks, link_map: link_map)
+
+      assert markdown == "[guide](guide.md)\n"
+    end
+
+    test "preserves Notion URLs for unknown pages", %{link_map: link_map} do
+      rt = %RichText{content: "external", link: "https://notion.so/unknown123"}
+      blocks = [NotionBlock.paragraph([rt])]
+
+      {:ok, markdown} = BlocksToMarkdown.convert(blocks, link_map: link_map)
+
+      assert markdown == "[external](https://notion.so/unknown123)\n"
+    end
+
+    test "preserves external URLs", %{link_map: link_map} do
+      rt = %RichText{content: "google", link: "https://google.com"}
+      blocks = [NotionBlock.paragraph([rt])]
+
+      {:ok, markdown} = BlocksToMarkdown.convert(blocks, link_map: link_map)
+
+      assert markdown == "[google](https://google.com)\n"
+    end
+
+    test "preserves anchors in resolved links", %{link_map: link_map} do
+      rt = %RichText{content: "section", link: "https://notion.so/abc123#intro"}
+      blocks = [NotionBlock.paragraph([rt])]
+
+      {:ok, markdown} = BlocksToMarkdown.convert(blocks, link_map: link_map)
+
+      assert markdown == "[section](overview.md#intro)\n"
+    end
+
+    test "without link_map, preserves original URLs" do
+      rt = %RichText{content: "page", link: "https://notion.so/abc123"}
+      blocks = [NotionBlock.paragraph([rt])]
+
+      {:ok, markdown} = BlocksToMarkdown.convert(blocks)
+
+      assert markdown == "[page](https://notion.so/abc123)\n"
+    end
+
+    test "resolves links in various block types", %{link_map: link_map} do
+      # Heading with link
+      heading = NotionBlock.heading_1([%RichText{content: "Overview", link: "https://notion.so/abc123"}])
+
+      # List item with link
+      list_item = NotionBlock.bulleted_list_item([
+        RichText.text("See "),
+        %RichText{content: "guide", link: "https://notion.so/def456"}
+      ])
+
+      # Quote with link
+      quote_block = NotionBlock.quote([%RichText{content: "overview", link: "https://notion.so/abc123"}])
+
+      blocks = [heading, list_item, quote_block]
+
+      {:ok, markdown} = BlocksToMarkdown.convert(blocks, link_map: link_map)
+
+      assert markdown =~ "# [Overview](overview.md)"
+      assert markdown =~ "- See [guide](guide.md)"
+      assert markdown =~ "> [overview](overview.md)"
     end
   end
 end

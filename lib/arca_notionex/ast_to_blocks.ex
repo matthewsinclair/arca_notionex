@@ -24,25 +24,42 @@ defmodule ArcaNotionex.AstToBlocks do
   """
 
   alias ArcaNotionex.Schemas.{NotionBlock, RichText}
+  alias ArcaNotionex.LinkMap
 
   @max_text_length 2000
   @max_blocks_per_chunk 100
 
   @type earmark_ast :: {String.t(), list(), list(), map()} | String.t()
   @type convert_result :: {:ok, [[NotionBlock.t()]]} | {:error, atom(), String.t()}
+  @type convert_opts :: [link_map: LinkMap.t(), current_file: String.t()]
 
   @doc """
   Converts markdown content to Notion blocks.
 
   Returns `{:ok, chunks}` where chunks is a list of block lists (for API chunking).
+
+  ## Options
+
+  - `:link_map` - LinkMap for resolving internal .md links to Notion URLs
+  - `:current_file` - Current file path for resolving relative links
+
+  ## Examples
+
+      # Without link resolution
+      {:ok, blocks} = AstToBlocks.convert(markdown)
+
+      # With link resolution (for --relink)
+      {:ok, link_map} = LinkMap.build(dir)
+      {:ok, blocks} = AstToBlocks.convert(markdown, link_map: link_map)
+
   """
-  @spec convert(String.t()) :: convert_result()
-  def convert(markdown) when is_binary(markdown) do
+  @spec convert(String.t(), convert_opts()) :: convert_result()
+  def convert(markdown, opts \\ []) when is_binary(markdown) do
     case EarmarkParser.as_ast(markdown) do
       {:ok, ast, _deprecation_messages} ->
         blocks =
           ast
-          |> Enum.flat_map(&convert_node/1)
+          |> Enum.flat_map(&convert_node(&1, opts))
           |> chunk_blocks()
 
         {:ok, blocks}
@@ -55,93 +72,95 @@ defmodule ArcaNotionex.AstToBlocks do
   @doc """
   Converts a single AST node to Notion block(s).
   """
-  @spec convert_node(earmark_ast()) :: [NotionBlock.t()]
-  def convert_node({"h1", _attrs, children, _meta}) do
-    [NotionBlock.heading_1(children_to_rich_text(children))]
+  @spec convert_node(earmark_ast(), convert_opts()) :: [NotionBlock.t()]
+  def convert_node(node, opts \\ [])
+
+  def convert_node({"h1", _attrs, children, _meta}, opts) do
+    [NotionBlock.heading_1(children_to_rich_text(children, opts))]
   end
 
-  def convert_node({"h2", _attrs, children, _meta}) do
-    [NotionBlock.heading_2(children_to_rich_text(children))]
+  def convert_node({"h2", _attrs, children, _meta}, opts) do
+    [NotionBlock.heading_2(children_to_rich_text(children, opts))]
   end
 
-  def convert_node({"h3", _attrs, children, _meta}) do
-    [NotionBlock.heading_3(children_to_rich_text(children))]
+  def convert_node({"h3", _attrs, children, _meta}, opts) do
+    [NotionBlock.heading_3(children_to_rich_text(children, opts))]
   end
 
   # h4, h5, h6 map to heading_3 (Notion max)
-  def convert_node({"h4", _attrs, children, _meta}) do
-    [NotionBlock.heading_3(children_to_rich_text(children))]
+  def convert_node({"h4", _attrs, children, _meta}, opts) do
+    [NotionBlock.heading_3(children_to_rich_text(children, opts))]
   end
 
-  def convert_node({"h5", _attrs, children, _meta}) do
-    [NotionBlock.heading_3(children_to_rich_text(children))]
+  def convert_node({"h5", _attrs, children, _meta}, opts) do
+    [NotionBlock.heading_3(children_to_rich_text(children, opts))]
   end
 
-  def convert_node({"h6", _attrs, children, _meta}) do
-    [NotionBlock.heading_3(children_to_rich_text(children))]
+  def convert_node({"h6", _attrs, children, _meta}, opts) do
+    [NotionBlock.heading_3(children_to_rich_text(children, opts))]
   end
 
-  def convert_node({"p", _attrs, children, _meta}) do
-    rich_text = children_to_rich_text(children)
+  def convert_node({"p", _attrs, children, _meta}, opts) do
+    rich_text = children_to_rich_text(children, opts)
     split_paragraph_blocks(rich_text)
   end
 
-  def convert_node({"ul", _attrs, children, _meta}) do
+  def convert_node({"ul", _attrs, children, _meta}, opts) do
     Enum.flat_map(children, fn
       {"li", _, li_children, _} ->
         {inline, nested} = separate_inline_and_nested(li_children)
-        nested_blocks = Enum.flat_map(nested, &convert_node/1)
-        [NotionBlock.bulleted_list_item(children_to_rich_text(inline), nested_blocks)]
+        nested_blocks = Enum.flat_map(nested, &convert_node(&1, opts))
+        [NotionBlock.bulleted_list_item(children_to_rich_text(inline, opts), nested_blocks)]
 
       _ ->
         []
     end)
   end
 
-  def convert_node({"ol", _attrs, children, _meta}) do
+  def convert_node({"ol", _attrs, children, _meta}, opts) do
     Enum.flat_map(children, fn
       {"li", _, li_children, _} ->
         {inline, nested} = separate_inline_and_nested(li_children)
-        nested_blocks = Enum.flat_map(nested, &convert_node/1)
-        [NotionBlock.numbered_list_item(children_to_rich_text(inline), nested_blocks)]
+        nested_blocks = Enum.flat_map(nested, &convert_node(&1, opts))
+        [NotionBlock.numbered_list_item(children_to_rich_text(inline, opts), nested_blocks)]
 
       _ ->
         []
     end)
   end
 
-  def convert_node({"pre", _attrs, [{"code", code_attrs, [code_text], _}], _meta})
+  def convert_node({"pre", _attrs, [{"code", code_attrs, [code_text], _}], _meta}, _opts)
       when is_binary(code_text) do
     language = extract_language(code_attrs)
     [NotionBlock.code([RichText.text(code_text)], language)]
   end
 
-  def convert_node({"pre", _attrs, [{"code", code_attrs, code_children, _}], _meta}) do
+  def convert_node({"pre", _attrs, [{"code", code_attrs, code_children, _}], _meta}, _opts) do
     language = extract_language(code_attrs)
     code_text = flatten_text(code_children)
     [NotionBlock.code([RichText.text(code_text)], language)]
   end
 
-  def convert_node({"blockquote", _attrs, children, _meta}) do
+  def convert_node({"blockquote", _attrs, children, _meta}, opts) do
     rich_text =
       Enum.flat_map(children, fn
-        {"p", _, p_children, _} -> children_to_rich_text(p_children)
-        other -> children_to_rich_text([other])
+        {"p", _, p_children, _} -> children_to_rich_text(p_children, opts)
+        other -> children_to_rich_text([other], opts)
       end)
 
     [NotionBlock.quote(rich_text)]
   end
 
-  def convert_node({"table", _attrs, children, _meta}) do
-    convert_table(children)
+  def convert_node({"table", _attrs, children, _meta}, opts) do
+    convert_table(children, opts)
   end
 
-  def convert_node({"hr", _attrs, _children, _meta}) do
+  def convert_node({"hr", _attrs, _children, _meta}, _opts) do
     # Horizontal rules become divider blocks (not yet supported, skip)
     []
   end
 
-  def convert_node(text) when is_binary(text) do
+  def convert_node(text, _opts) when is_binary(text) do
     trimmed = String.trim(text)
 
     if trimmed == "" do
@@ -151,7 +170,7 @@ defmodule ArcaNotionex.AstToBlocks do
     end
   end
 
-  def convert_node(_unknown) do
+  def convert_node(_unknown, _opts) do
     # Skip unsupported nodes
     []
   end
@@ -161,52 +180,66 @@ defmodule ArcaNotionex.AstToBlocks do
   @doc """
   Converts AST children to a list of RichText structs.
   """
-  @spec children_to_rich_text(list()) :: [RichText.t()]
-  def children_to_rich_text(children) do
+  @spec children_to_rich_text(list(), convert_opts()) :: [RichText.t()]
+  def children_to_rich_text(children, opts \\ []) do
     children
-    |> Enum.flat_map(&node_to_rich_text/1)
+    |> Enum.flat_map(&node_to_rich_text(&1, opts))
     |> merge_adjacent_text()
   end
 
-  defp node_to_rich_text(text) when is_binary(text) do
+  defp node_to_rich_text(text, _opts) when is_binary(text) do
     [RichText.text(text)]
   end
 
-  defp node_to_rich_text({"strong", _, children, _}) do
+  defp node_to_rich_text({"strong", _, children, _}, opts) do
     children
-    |> children_to_rich_text()
+    |> children_to_rich_text(opts)
     |> Enum.map(&add_annotation(&1, :bold))
   end
 
-  defp node_to_rich_text({"em", _, children, _}) do
+  defp node_to_rich_text({"em", _, children, _}, opts) do
     children
-    |> children_to_rich_text()
+    |> children_to_rich_text(opts)
     |> Enum.map(&add_annotation(&1, :italic))
   end
 
-  defp node_to_rich_text({"code", _, [text], _}) when is_binary(text) do
+  defp node_to_rich_text({"code", _, [text], _}, _opts) when is_binary(text) do
     [RichText.code(text)]
   end
 
-  defp node_to_rich_text({"a", attrs, children, _}) do
+  defp node_to_rich_text({"a", attrs, children, _}, opts) do
     href = get_attr(attrs, "href")
+    resolved_href = resolve_link(href, opts)
 
     children
-    |> children_to_rich_text()
-    |> Enum.map(&add_link(&1, href))
+    |> children_to_rich_text(opts)
+    |> Enum.map(&add_link(&1, resolved_href))
   end
 
-  defp node_to_rich_text({"del", _, children, _}) do
+  defp node_to_rich_text({"del", _, children, _}, opts) do
     children
-    |> children_to_rich_text()
+    |> children_to_rich_text(opts)
     |> Enum.map(&add_annotation(&1, :strikethrough))
   end
 
-  defp node_to_rich_text({"br", _, _, _}) do
+  defp node_to_rich_text({"br", _, _, _}, _opts) do
     [RichText.text("\n")]
   end
 
-  defp node_to_rich_text(_), do: []
+  defp node_to_rich_text(_, _opts), do: []
+
+  # Link resolution
+
+  defp resolve_link(href, opts) do
+    link_map = Keyword.get(opts, :link_map)
+    current_file = Keyword.get(opts, :current_file)
+
+    if link_map do
+      LinkMap.resolve_link(link_map, href, direction: :forward, current_file: current_file)
+    else
+      href
+    end
+  end
 
   # Annotation helpers
 
@@ -222,7 +255,7 @@ defmodule ArcaNotionex.AstToBlocks do
 
   # Table conversion
 
-  defp convert_table(children) do
+  defp convert_table(children, opts) do
     {thead_rows, tbody_rows} = extract_table_parts(children)
     all_rows = thead_rows ++ tbody_rows
 
@@ -237,7 +270,7 @@ defmodule ArcaNotionex.AstToBlocks do
           Enum.map(rows, fn {"tr", _, cells, _} ->
             cell_rich_texts =
               Enum.map(cells, fn {_tag, _, cell_children, _} ->
-                children_to_rich_text(cell_children)
+                children_to_rich_text(cell_children, opts)
               end)
 
             NotionBlock.table_row(cell_rich_texts)
