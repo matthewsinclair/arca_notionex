@@ -1,11 +1,11 @@
 ---
 verblock: "07 Jan 2026:v0.1: matts - Initial version"
 intent_version: 2.2.0
-status: WIP
+status: Completed
 created: 20260107
-completed: 
+completed: 20260108
 ---
-# ST0005: CLI Integration [Title] Polish
+# ST0004: API Client [Title] Sync
 
 ## Objective
 

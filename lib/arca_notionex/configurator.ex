@@ -9,7 +9,8 @@ defmodule ArcaNotionex.Configurator do
       Arca.Cli.Commands.ReplCommand,
       ArcaNotionex.Commands.AuditCommand,
       ArcaNotionex.Commands.SyncCommand,
-      ArcaNotionex.Commands.PrepareCommand
+      ArcaNotionex.Commands.PrepareCommand,
+      ArcaNotionex.Commands.PullCommand
     ],
     author: "matts",
     about: "Notion Markdown Sync CLI",

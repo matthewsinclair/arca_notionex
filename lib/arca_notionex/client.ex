@@ -113,6 +113,63 @@ defmodule ArcaNotionex.Client do
     delete("/blocks/#{block_id}")
   end
 
+  @doc """
+  Fetches and parses all block children of a page.
+
+  Returns parsed NotionBlock structs instead of raw API response.
+  Recursively fetches children for blocks that have nested content.
+
+  ## Options
+
+  - `:fetch_children` - Recursively fetch nested children (default: true)
+  - `:max_depth` - Maximum nesting depth to fetch (default: 10)
+
+  ## Examples
+
+      iex> {:ok, blocks} = Client.get_page_blocks("page-uuid-here")
+      iex> [%NotionBlock{type: :paragraph, ...}, ...]
+
+  """
+  @spec get_page_blocks(String.t(), keyword()) ::
+          {:ok, [NotionBlock.t()]} | {:error, atom(), String.t()}
+  def get_page_blocks(page_id, opts \\ []) do
+    opts = Keyword.merge([fetch_children: true, max_depth: 10], opts)
+
+    with {:ok, response} <- list_child_pages(page_id) do
+      blocks_with_children = fetch_nested_blocks(response.results, opts, 0)
+      ArcaNotionex.BlocksFromNotion.parse(blocks_with_children, opts)
+    end
+  end
+
+  defp fetch_nested_blocks(blocks, opts, depth) do
+    max_depth = Keyword.get(opts, :max_depth, 10)
+    fetch_children = Keyword.get(opts, :fetch_children, true)
+
+    if depth >= max_depth or not fetch_children do
+      blocks
+    else
+      Enum.map(blocks, fn block ->
+        if Map.get(block, "has_children", false) do
+          block_id = Map.get(block, "id")
+
+          case list_child_pages(block_id) do
+            {:ok, children_response} ->
+              children = fetch_nested_blocks(children_response.results, opts, depth + 1)
+              block_type = Map.get(block, "type")
+              block_data = Map.get(block, block_type, %{})
+              updated_data = Map.put(block_data, "children", children)
+              Map.put(block, block_type, updated_data)
+
+            {:error, _, _} ->
+              block
+          end
+        else
+          block
+        end
+      end)
+    end
+  end
+
   # Private HTTP methods
 
   defp get(path, params \\ []) do

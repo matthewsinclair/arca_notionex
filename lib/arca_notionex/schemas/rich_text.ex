@@ -122,6 +122,53 @@ defmodule ArcaNotionex.Schemas.RichText do
   end
 
   @doc """
+  Parses a list of Notion API rich_text objects into RichText structs.
+  """
+  @spec from_notion([map()]) :: [t()]
+  def from_notion(rich_text_array) when is_list(rich_text_array) do
+    Enum.map(rich_text_array, &parse_rich_text/1)
+  end
+
+  @doc """
+  Parses a single Notion API rich_text object into a RichText struct.
+  """
+  @spec parse_rich_text(map()) :: t()
+  def parse_rich_text(%{"type" => type} = rt) do
+    content = extract_content(rt, type)
+    link = extract_link(rt, type)
+    annotations = rt["annotations"] || %{}
+
+    %__MODULE__{
+      type: type,
+      content: content,
+      link: link,
+      bold: annotations["bold"] || false,
+      italic: annotations["italic"] || false,
+      strikethrough: annotations["strikethrough"] || false,
+      underline: annotations["underline"] || false,
+      code: annotations["code"] || false,
+      color: annotations["color"] || "default",
+      href: rt["href"]
+    }
+  end
+
+  def parse_rich_text(_), do: %__MODULE__{}
+
+  defp extract_content(rt, "text"), do: get_in(rt, ["text", "content"]) || ""
+  defp extract_content(rt, "mention"), do: rt["plain_text"] || ""
+  defp extract_content(rt, "equation"), do: get_in(rt, ["equation", "expression"]) || ""
+  defp extract_content(rt, _), do: rt["plain_text"] || ""
+
+  defp extract_link(rt, "text") do
+    case get_in(rt, ["text", "link", "url"]) do
+      nil -> nil
+      url -> url
+    end
+  end
+
+  defp extract_link(_, _), do: nil
+
+  @doc """
   Converts the RichText struct to Notion API format.
   """
   @spec to_notion(t()) :: map()
