@@ -11,6 +11,15 @@ defmodule ArcaNotionex.CLI do
 
   Delegates to Arca.Cli.main/1 to handle command parsing and execution.
   """
+  def main(["--version"]) do
+    Application.ensure_all_started(:arca_notionex)
+    IO.puts("notionex #{Arca.Cli.version()}")
+  end
+
+  def main(["-v"]) do
+    main(["--version"])
+  end
+
   def main(args) do
     # Ensure the application is started
     Application.ensure_all_started(:arca_notionex)

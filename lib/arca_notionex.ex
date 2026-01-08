@@ -12,10 +12,10 @@ defmodule ArcaNotionex do
   """
 
   @doc """
-  Returns the application version.
+  Returns the application version from config.
   """
   @spec version() :: String.t()
   def version do
-    "0.1.0"
+    Application.get_env(:arca_cli, :version, "unknown")
   end
 end
