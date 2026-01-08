@@ -1,7 +1,7 @@
 ---
 verblock: "08 Jan 2026:v0.3: matts - Implementation complete"
 intent_version: 2.2.0
-status: COMPLETE
+status: WIP
 created: 20260108
 completed: 20260108
 ---

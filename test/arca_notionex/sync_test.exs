@@ -338,4 +338,162 @@ defmodule ArcaNotionex.SyncTest do
                Sync.sync_directory(tmp_dir, root_page_id: "fake-id", dry_run: true)
     end
   end
+
+  describe "notion_id optimization" do
+    test "files with notion_id skip directory page creation", %{tmp_dir: tmp_dir} do
+      # Create deeply nested file with notion_id already set
+      nested_dir = Path.join([tmp_dir, "deep", "nested", "path"])
+      File.mkdir_p!(nested_dir)
+
+      content = """
+      ---
+      title: "Existing Page"
+      notion_id: "existing-page-123"
+      ---
+      # Content
+      """
+
+      File.write!(Path.join(nested_dir, "existing.md"), content)
+
+      # In dry-run, this should work without creating directory pages
+      # because the file already has a notion_id
+      assert {:ok, result} = Sync.sync_directory(tmp_dir, root_page_id: "root-id", dry_run: true)
+      assert result.updated == ["deep/nested/path/existing.md"]
+      assert result.created == []
+      assert result.errors == []
+    end
+
+    test "files without notion_id create directory pages", %{tmp_dir: tmp_dir} do
+      # Create deeply nested file without notion_id
+      nested_dir = Path.join([tmp_dir, "deep", "nested", "path"])
+      File.mkdir_p!(nested_dir)
+
+      content = """
+      ---
+      title: "New Page"
+      ---
+      # Content
+      """
+
+      File.write!(Path.join(nested_dir, "new.md"), content)
+
+      # In dry-run, this should create directory pages for the hierarchy
+      assert {:ok, result} = Sync.sync_directory(tmp_dir, root_page_id: "root-id", dry_run: true)
+      assert result.created == ["deep/nested/path/new.md"]
+      assert result.updated == []
+      assert result.errors == []
+    end
+
+    test "mixed files: some with notion_id, some without", %{tmp_dir: tmp_dir} do
+      # Create structure with both types
+      nested_dir = Path.join([tmp_dir, "docs", "api"])
+      File.mkdir_p!(nested_dir)
+
+      # File with notion_id (update)
+      existing_content = """
+      ---
+      title: "Existing API Doc"
+      notion_id: "existing-api-123"
+      ---
+      # API
+      """
+
+      File.write!(Path.join(nested_dir, "existing.md"), existing_content)
+
+      # File without notion_id (create)
+      new_content = """
+      ---
+      title: "New API Doc"
+      ---
+      # New API
+      """
+
+      File.write!(Path.join(nested_dir, "new.md"), new_content)
+
+      assert {:ok, result} = Sync.sync_directory(tmp_dir, root_page_id: "root-id", dry_run: true)
+      assert "docs/api/existing.md" in result.updated
+      assert "docs/api/new.md" in result.created
+      assert result.errors == []
+    end
+  end
+
+  describe "two-pass --relink" do
+    import ExUnit.CaptureIO
+
+    test "relink with all files having notion_id does single pass", %{tmp_dir: tmp_dir} do
+      # Create files that all have notion_ids
+      content1 = """
+      ---
+      title: "Page 1"
+      notion_id: "page-1-id"
+      ---
+      # Page 1
+
+      Link to [Page 2](page2.md)
+      """
+
+      content2 = """
+      ---
+      title: "Page 2"
+      notion_id: "page-2-id"
+      ---
+      # Page 2
+
+      Link to [Page 1](page1.md)
+      """
+
+      File.write!(Path.join(tmp_dir, "page1.md"), content1)
+      File.write!(Path.join(tmp_dir, "page2.md"), content2)
+
+      # With --relink and all files having notion_ids, single pass suffices
+      result_ref = make_ref()
+
+      output =
+        capture_io(fn ->
+          result = Sync.sync_directory(tmp_dir, root_page_id: "root-id", dry_run: true, relink: true)
+          send(self(), {result_ref, result})
+        end)
+
+      assert_receive {^result_ref, {:ok, sync_result}}
+      assert length(sync_result.updated) == 2
+      assert sync_result.created == []
+      assert output =~ "single pass"
+    end
+
+    test "relink in dry-run mode only does one pass", %{tmp_dir: tmp_dir} do
+      # Create files without notion_ids (new files)
+      content1 = """
+      ---
+      title: "New Page 1"
+      ---
+      # Page 1
+
+      Link to [Page 2](page2.md)
+      """
+
+      content2 = """
+      ---
+      title: "New Page 2"
+      ---
+      # Page 2
+      """
+
+      File.write!(Path.join(tmp_dir, "page1.md"), content1)
+      File.write!(Path.join(tmp_dir, "page2.md"), content2)
+
+      # In dry-run with new files, only pass 1 runs (no actual creation)
+      result_ref = make_ref()
+
+      output =
+        capture_io(fn ->
+          result = Sync.sync_directory(tmp_dir, root_page_id: "root-id", dry_run: true, relink: true)
+          send(self(), {result_ref, result})
+        end)
+
+      assert_receive {^result_ref, {:ok, sync_result}}
+      assert length(sync_result.created) == 2
+      assert sync_result.updated == []
+      assert output =~ "Pass 1/2"
+    end
+  end
 end

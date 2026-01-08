@@ -38,24 +38,77 @@ defmodule ArcaNotionex.Sync do
     dry_run = Keyword.get(opts, :dry_run, false)
     relink = Keyword.get(opts, :relink, false)
 
-    # Build link map when relink is enabled
-    link_map =
-      if relink do
-        case LinkMap.build(dir_path) do
-          {:ok, map} -> map
-          {:error, _, _} -> LinkMap.empty()
-        end
-      else
-        nil
-      end
-
-    sync_opts = [dry_run: dry_run, link_map: link_map, base_dir: dir_path]
-
     with {:ok, files} <- discover_files(dir_path),
-         :ok <- validate_unique_titles(files, dir_path),
-         {:ok, result} <- sync_files(files, dir_path, root_page_id, sync_opts) do
-      {:ok, result}
+         :ok <- validate_unique_titles(files, dir_path) do
+      if relink do
+        sync_with_relink(files, dir_path, root_page_id, dry_run)
+      else
+        # Single pass without link resolution
+        sync_opts = [dry_run: dry_run, link_map: nil, base_dir: dir_path]
+        sync_files(files, dir_path, root_page_id, sync_opts)
+      end
     end
+  end
+
+  # Handle --relink with automatic two-pass when needed
+  defp sync_with_relink(files, dir_path, root_page_id, dry_run) do
+    # Check if any files need creation (no notion_id)
+    new_files = Enum.filter(files, &file_needs_creation?(&1.path))
+
+    if Enum.empty?(new_files) do
+      # All files have notion_ids - single pass with link resolution
+      IO.puts("All files have notion_ids - resolving links in single pass")
+      link_map = build_link_map_safe(dir_path)
+      sync_opts = [dry_run: dry_run, link_map: link_map, base_dir: dir_path]
+      sync_files(files, dir_path, root_page_id, sync_opts)
+    else
+      # Two-pass sync needed
+      IO.puts("\nPass 1/2: Creating pages (#{length(new_files)} new files)")
+
+      # Pass 1: Sync WITHOUT link resolution to create pages
+      sync_opts_pass1 = [dry_run: dry_run, link_map: nil, base_dir: dir_path]
+      {:ok, result1} = sync_files(files, dir_path, root_page_id, sync_opts_pass1)
+
+      if dry_run do
+        {:ok, result1}
+      else
+        IO.puts("\nPass 2/2: Resolving links")
+
+        # Rebuild link map now that notion_ids exist
+        link_map = build_link_map_safe(dir_path)
+
+        # Pass 2: Re-sync to update with resolved links
+        sync_opts_pass2 = [dry_run: dry_run, link_map: link_map, base_dir: dir_path]
+        {:ok, result2} = sync_files(files, dir_path, root_page_id, sync_opts_pass2)
+
+        # Merge results: created from pass1, updated from pass2
+        {:ok, merge_sync_results(result1, result2)}
+      end
+    end
+  end
+
+  # Check if a file needs creation (no notion_id)
+  defp file_needs_creation?(file_path) do
+    case read_and_parse_file(file_path) do
+      {:ok, %{notion_id: notion_id}, _body} when is_binary(notion_id) -> false
+      _ -> true
+    end
+  end
+
+  defp build_link_map_safe(dir_path) do
+    case LinkMap.build(dir_path) do
+      {:ok, map} -> map
+      {:error, _, _} -> LinkMap.empty()
+    end
+  end
+
+  defp merge_sync_results(r1, r2) do
+    %SyncResult{
+      created: r1.created,
+      updated: r2.updated,
+      skipped: r2.skipped,
+      errors: r1.errors ++ r2.errors
+    }
   end
 
   @doc """
@@ -229,31 +282,89 @@ defmodule ArcaNotionex.Sync do
 
     {final_result, _final_map} =
       Enum.reduce(files, {result, page_map}, fn file, {res, pmap} ->
-        # Ensure parent directory pages exist
-        case ensure_parent_pages(file, pmap, root_page_id, base_path, dry_run) do
-          {:ok, updated_pmap, parent_id} ->
-            # Sync the file with all options (dry_run, link_map, base_dir)
-            case sync_file(file.path, parent_id, sync_opts) do
-              {:ok, :created, _} ->
-                {SyncResult.add_created(res, file.relative_path), updated_pmap}
+        # Read file once and branch based on notion_id presence
+        case read_and_parse_file(file.path) do
+          {:ok, frontmatter, _body} ->
+            sync_single_file(
+              file,
+              frontmatter,
+              res,
+              pmap,
+              root_page_id,
+              base_path,
+              sync_opts,
+              dry_run
+            )
 
-              {:ok, :updated, _} ->
-                {SyncResult.add_updated(res, file.relative_path), updated_pmap}
-
-              {:ok, :skipped, _} ->
-                {SyncResult.add_skipped(res, file.relative_path), updated_pmap}
-
-              {:error, _type, reason} ->
-                {SyncResult.add_error(res, file.relative_path, reason), updated_pmap}
-            end
-
-          {:error, _type, reason} ->
-            # Directory creation failed - add error and keep old page_map
+          {:error, reason} ->
             {SyncResult.add_error(res, file.relative_path, reason), pmap}
         end
       end)
 
     {:ok, final_result}
+  end
+
+  # Single file read and parse
+  defp read_and_parse_file(file_path) do
+    with {:ok, content} <- File.read(file_path),
+         {:ok, frontmatter, body} <- Frontmatter.parse(content) do
+      {:ok, frontmatter, body}
+    else
+      {:error, reason} -> {:error, "Failed to read: #{inspect(reason)}"}
+      {:error, _type, reason} -> {:error, reason}
+    end
+  end
+
+  # Pattern-matched: files WITH notion_id (updates) - skip ensure_parent_pages
+  defp sync_single_file(
+         file,
+         %{notion_id: notion_id},
+         res,
+         pmap,
+         root_page_id,
+         _base_path,
+         sync_opts,
+         _dry_run
+       )
+       when is_binary(notion_id) do
+    case sync_file(file.path, root_page_id, sync_opts) do
+      {:ok, :created, _} -> {SyncResult.add_created(res, file.relative_path), pmap}
+      {:ok, :updated, _} -> {SyncResult.add_updated(res, file.relative_path), pmap}
+      {:ok, :skipped, _} -> {SyncResult.add_skipped(res, file.relative_path), pmap}
+      {:error, _type, reason} -> {SyncResult.add_error(res, file.relative_path, reason), pmap}
+    end
+  end
+
+  # Pattern-matched: files WITHOUT notion_id (creates) - ensure parent pages exist
+  defp sync_single_file(
+         file,
+         _frontmatter,
+         res,
+         pmap,
+         root_page_id,
+         base_path,
+         sync_opts,
+         dry_run
+       ) do
+    case ensure_parent_pages(file, pmap, root_page_id, base_path, dry_run) do
+      {:ok, updated_pmap, parent_id} ->
+        case sync_file(file.path, parent_id, sync_opts) do
+          {:ok, :created, _} ->
+            {SyncResult.add_created(res, file.relative_path), updated_pmap}
+
+          {:ok, :updated, _} ->
+            {SyncResult.add_updated(res, file.relative_path), updated_pmap}
+
+          {:ok, :skipped, _} ->
+            {SyncResult.add_skipped(res, file.relative_path), updated_pmap}
+
+          {:error, _type, reason} ->
+            {SyncResult.add_error(res, file.relative_path, reason), updated_pmap}
+        end
+
+      {:error, _type, reason} ->
+        {SyncResult.add_error(res, file.relative_path, reason), pmap}
+    end
   end
 
   defp ensure_parent_pages(
