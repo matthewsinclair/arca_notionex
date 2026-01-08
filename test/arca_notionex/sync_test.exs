@@ -450,7 +450,9 @@ defmodule ArcaNotionex.SyncTest do
 
       output =
         capture_io(fn ->
-          result = Sync.sync_directory(tmp_dir, root_page_id: "root-id", dry_run: true, relink: true)
+          result =
+            Sync.sync_directory(tmp_dir, root_page_id: "root-id", dry_run: true, relink: true)
+
           send(self(), {result_ref, result})
         end)
 
@@ -486,7 +488,9 @@ defmodule ArcaNotionex.SyncTest do
 
       output =
         capture_io(fn ->
-          result = Sync.sync_directory(tmp_dir, root_page_id: "root-id", dry_run: true, relink: true)
+          result =
+            Sync.sync_directory(tmp_dir, root_page_id: "root-id", dry_run: true, relink: true)
+
           send(self(), {result_ref, result})
         end)
 
