@@ -1,11 +1,13 @@
 import Config
 
+version = "VERSION.md" |> File.read!() |> String.trim()
+
 config :arca_notionex,
   env: config_env(),
   name: "notionex",
   about: "Notion Markdown Sync CLI",
   description: "Sync markdown files to Notion pages",
-  version: "0.1.0",
+  version: version,
   author: "matts",
   prompt_symbol: ">",
   configurators: [
@@ -17,7 +19,7 @@ config :arca_cli,
   name: "notionex",
   about: "Notion Markdown Sync CLI",
   description: "Sync markdown files to Notion pages",
-  version: "0.1.0",
+  version: version,
   author: "matts",
   url: "https://github.com/matthewsinclair/arca-notionex",
   prompt_symbol: ">",

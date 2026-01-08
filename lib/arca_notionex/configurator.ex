@@ -14,6 +14,5 @@ defmodule ArcaNotionex.Configurator do
     ],
     author: "matts",
     about: "Notion Markdown Sync CLI",
-    description: "Sync markdown files to Notion pages",
-    version: "0.1.0"
+    description: "Sync markdown files to Notion pages"
 end
