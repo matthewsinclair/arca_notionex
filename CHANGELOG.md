@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.9] - 2026-01-09
+
+### Fixed
+
+- **Audit: Files with notion_id shown as unlinked** - Files with `notion_id` in frontmatter were incorrectly showing `Notion: -` because scan only checked immediate children. Now uses recursive scanning to find all nested pages.
+
+- **Audit: Directory pages shown as orphans** - Container pages created by notionex for directories (e.g., "Team") were incorrectly marked as `[orphan page]` with `Action: DELETE`. Now recognized as `[directory]` with `Action: -` using title matching + has-children heuristic.
+
+### Added
+
+- **Recursive Notion page scanning** - `scan_notion_pages/1` now recursively fetches all descendant pages, enabling proper audit of nested directory structures.
+
+- **AuditEntry.unverified/4** - New entry type for files with `notion_id` but page not found in scan. Shows `? (id...)` in Notion column instead of discarding the notion_id.
+
+- **AuditEntry.directory_page/2** - New entry type for structural container pages. Displays as `[directory]` instead of `[orphan page]`.
+
 ## [0.1.8] - 2026-01-08
 
 ### Fixed

@@ -138,7 +138,11 @@ defmodule ArcaNotionex.Audit do
   end
 
   defp scan_notion_pages(root_page_id) do
-    case Client.list_child_pages(root_page_id) do
+    scan_notion_pages_recursive(root_page_id, [])
+  end
+
+  defp scan_notion_pages_recursive(page_id, acc) do
+    case Client.list_child_pages(page_id) do
       {:ok, response} ->
         pages =
           response.results
@@ -146,11 +150,18 @@ defmodule ArcaNotionex.Audit do
           |> Enum.map(fn block ->
             %{
               id: Map.get(block, "id"),
-              title: get_in(block, ["child_page", "title"]) || "Untitled"
+              title: get_in(block, ["child_page", "title"]) || "Untitled",
+              parent_id: page_id
             }
           end)
 
-        {:ok, pages}
+        # Recursively scan children
+        Enum.reduce_while(pages, {:ok, acc ++ pages}, fn page, {:ok, current_acc} ->
+          case scan_notion_pages_recursive(page.id, current_acc) do
+            {:ok, updated_acc} -> {:cont, {:ok, updated_acc}}
+            error -> {:halt, error}
+          end
+        end)
 
       {:error, type, reason} ->
         {:error, type, reason}
@@ -161,6 +172,24 @@ defmodule ArcaNotionex.Audit do
     # Build a map of notion_id -> page
     notion_map = Map.new(notion_pages, fn p -> {p.id, p} end)
 
+    # Build set of local notion_ids
+    local_notion_ids = MapSet.new(local_files, &FileEntry.notion_id/1)
+
+    # Build set of local directory paths (humanized for matching)
+    local_directories =
+      local_files
+      |> Enum.map(& &1.parent_path)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+      |> MapSet.new(&humanize_dirname/1)
+
+    # Build set of page IDs that are parents (have children)
+    parent_page_ids =
+      notion_pages
+      |> Enum.map(& &1.parent_id)
+      |> Enum.reject(&is_nil/1)
+      |> MapSet.new()
+
     # Create entries for local files
     local_entries =
       Enum.map(local_files, fn file ->
@@ -170,17 +199,31 @@ defmodule ArcaNotionex.Audit do
         build_audit_entry(file, notion_page)
       end)
 
-    # Find orphaned Notion pages (pages without local files)
-    local_notion_ids = MapSet.new(local_files, &FileEntry.notion_id/1)
-
+    # Classify Notion-only pages as orphans or directory pages
     orphan_entries =
       notion_pages
       |> Enum.reject(fn p -> MapSet.member?(local_notion_ids, p.id) end)
       |> Enum.map(fn p ->
-        AuditEntry.notion_only(p.id, p.title)
+        is_directory_page =
+          MapSet.member?(local_directories, p.title) and
+            MapSet.member?(parent_page_ids, p.id)
+
+        if is_directory_page do
+          AuditEntry.directory_page(p.id, p.title)
+        else
+          AuditEntry.notion_only(p.id, p.title)
+        end
       end)
 
     local_entries ++ orphan_entries
+  end
+
+  defp humanize_dirname(name) do
+    name
+    |> String.replace(~r/[-_]/, " ")
+    |> String.split()
+    |> Enum.map(&String.capitalize/1)
+    |> Enum.join(" ")
   end
 
   defp build_audit_entry(%FileEntry{} = file, notion_page) do
@@ -193,8 +236,8 @@ defmodule ArcaNotionex.Audit do
         AuditEntry.local_only(file.relative_path, title)
 
       notion_page == nil ->
-        # Has notion_id but page not found (deleted?)
-        AuditEntry.local_only(file.relative_path, title)
+        # Has notion_id but page not found - could be deleted or outside scan scope
+        AuditEntry.unverified(file.relative_path, title, notion_id, synced_at)
 
       needs_update?(synced_at) ->
         AuditEntry.stale(file.relative_path, title, notion_id, synced_at)
@@ -226,6 +269,7 @@ defmodule ArcaNotionex.Audit do
   defp format_local_status(:missing), do: "-"
 
   defp format_notion_status(:exists, id), do: "Y (#{truncate(id, 8)})"
+  defp format_notion_status(:unknown, id) when is_binary(id), do: "? (#{truncate(id, 8)})"
   defp format_notion_status(:missing, _), do: "-"
   defp format_notion_status(:unknown, _), do: "?"
 

@@ -111,6 +111,23 @@ defmodule ArcaNotionex.Schemas.AuditEntry do
   end
 
   @doc """
+  Creates an unverified audit entry (file has notion_id but page not found in scan).
+  This can happen if the page was deleted in Notion or if it's outside the scan scope.
+  """
+  @spec unverified(String.t(), String.t(), String.t(), DateTime.t() | nil) :: t()
+  def unverified(file, title, notion_id, synced_at \\ nil) do
+    %__MODULE__{
+      file: file,
+      title: title,
+      local_status: :exists,
+      notion_status: :unknown,
+      notion_id: notion_id,
+      synced_at: synced_at,
+      action_needed: :update
+    }
+  end
+
+  @doc """
   Creates a notion-only audit entry (page exists but no local file).
   """
   @spec notion_only(String.t(), String.t()) :: t()
@@ -123,6 +140,23 @@ defmodule ArcaNotionex.Schemas.AuditEntry do
       notion_id: notion_id,
       synced_at: nil,
       action_needed: :delete
+    }
+  end
+
+  @doc """
+  Creates an audit entry for a directory container page.
+  These are structural pages created by notionex to hold child pages.
+  """
+  @spec directory_page(String.t(), String.t()) :: t()
+  def directory_page(notion_id, title) do
+    %__MODULE__{
+      file: "[directory]",
+      title: title,
+      local_status: :exists,
+      notion_status: :exists,
+      notion_id: notion_id,
+      synced_at: nil,
+      action_needed: :none
     }
   end
 
