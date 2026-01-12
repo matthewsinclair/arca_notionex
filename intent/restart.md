@@ -1,5 +1,5 @@
 ---
-verblock: "12 Jan 2026:v0.1: matts - Initial version"
+verblock: "12 Jan 2026:v0.2: matts - Docs refresh"
 ---
 # Session Restart Context
 

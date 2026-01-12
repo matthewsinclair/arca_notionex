@@ -1,5 +1,5 @@
 ---
-verblock: "12 Jan 2026:v0.2: matts - Updated with current state"
+verblock: "12 Jan 2026:v0.3: matts - All docs updated, project idle"
 ---
 # Work In Progress
 
