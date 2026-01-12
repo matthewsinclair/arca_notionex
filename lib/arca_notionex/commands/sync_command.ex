@@ -21,9 +21,11 @@ defmodule ArcaNotionex.Commands.SyncCommand do
       --root-page  Notion page ID to sync under
 
     Optional:
-      --dry-run    Show what would be synced without making changes
-      --relink     Resolve internal .md links to Notion page URLs
-                   (requires prior sync to populate notion_ids)
+      --dry-run          Show what would be synced without making changes
+      --relink           Resolve internal .md links to Notion page URLs
+                         (requires prior sync to populate notion_ids)
+      --skip-child-links Skip links to filesystem subdirectories
+                         (use when subdirs are Notion child pages)
 
     Workflow for internal links:
       1. notionex sync --dir ./docs --root-page abc123
@@ -64,6 +66,11 @@ defmodule ArcaNotionex.Commands.SyncCommand do
         short: "-l",
         help: "Resolve internal .md links to Notion page URLs",
         default: false
+      ],
+      skip_child_links: [
+        long: "--skip-child-links",
+        help: "Skip links to filesystem subdirectories (use when subdirs are Notion children)",
+        default: false
       ]
     ]
 
@@ -73,8 +80,14 @@ defmodule ArcaNotionex.Commands.SyncCommand do
     root_page = get_option(args, :root_page)
     dry_run = get_flag(args, :dry_run)
     relink = get_flag(args, :relink)
+    skip_child_links = get_flag(args, :skip_child_links)
 
-    case Sync.sync_directory(dir, root_page_id: root_page, dry_run: dry_run, relink: relink) do
+    case Sync.sync_directory(dir,
+           root_page_id: root_page,
+           dry_run: dry_run,
+           relink: relink,
+           skip_child_links: skip_child_links
+         ) do
       {:ok, result} ->
         format_result(result, dry_run)
 

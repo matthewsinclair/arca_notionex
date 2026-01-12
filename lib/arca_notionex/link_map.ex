@@ -106,6 +106,55 @@ defmodule ArcaNotionex.LinkMap do
   end
 
   @doc """
+  Checks if a link points to a child directory's index.md.
+
+  Used to detect links that would duplicate Notion's automatic child page display.
+  A link is considered a "child link" if it points to a subdirectory's index.md.
+
+  ## Examples
+
+      # From parent/index.md to parent/child/index.md
+      is_child_link?("child/index.md", "parent/index.md")
+      #=> true
+
+      # From parent/index.md to sibling.md (not a child)
+      is_child_link?("sibling.md", "parent/index.md")
+      #=> false
+
+      # From parent/index.md to ../other.md (parent, not child)
+      is_child_link?("../other.md", "parent/index.md")
+      #=> false
+  """
+  @spec is_child_link?(String.t(), String.t()) :: boolean()
+  def is_child_link?(href, current_file) do
+    cond do
+      # External links are not child links
+      String.starts_with?(href, "http://") or String.starts_with?(href, "https://") ->
+        false
+
+      # Anchor-only links are not child links
+      String.starts_with?(href, "#") ->
+        false
+
+      # Check if internal link points to child directory
+      true ->
+        {path, _anchor} = split_anchor(href)
+        resolved = resolve_relative_path(path, current_file)
+        current_dir = Path.dirname(current_file) |> normalize_dirname()
+        target_dir = Path.dirname(resolved) |> normalize_dirname()
+
+        # Child link if target is in a subdirectory of current
+        target_dir != current_dir and
+          target_dir != "" and
+          (current_dir == "" or String.starts_with?(target_dir, current_dir <> "/"))
+    end
+  end
+
+  # Normalize dirname to handle root directory consistently
+  defp normalize_dirname("."), do: ""
+  defp normalize_dirname(dir), do: dir
+
+  @doc """
   Resolves a link for Notion API, returning either a page mention or regular link.
 
   Returns:

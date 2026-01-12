@@ -38,8 +38,8 @@ Markdown images (`![alt](url)`) fall through to the catch-all in `ast_to_blocks.
 
 ## Acceptance Criteria
 
-- [ ] External URL images convert to Notion image blocks
-- [ ] Alt text becomes image caption
-- [ ] Relative paths skipped with warning
-- [ ] Data URLs skipped with warning
-- [ ] Tests pass for all edge cases
+- [x] External URL images convert to Notion image blocks
+- [x] Alt text becomes image caption
+- [x] Relative paths skipped silently (no warning to reduce noise)
+- [x] Data URLs skipped silently (no warning to reduce noise)
+- [x] Tests pass for all edge cases (8 new tests added)

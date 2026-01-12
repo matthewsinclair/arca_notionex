@@ -392,6 +392,195 @@ defmodule ArcaNotionex.AstToBlocksTest do
       link_rt = Enum.find(block.rich_text, fn rt -> rt.content == "overview" end)
       assert link_rt.link == "overview.md"
     end
+
+    test "resolves child index.md links from parent index.md (ST0011 scenario)" do
+      # ST0011: parent/index.md linking to child/index.md should resolve to page mention
+      File.mkdir_p!(Path.join(@test_dir, "prototypes/storyfield"))
+      File.mkdir_p!(Path.join(@test_dir, "prototypes/frontdesk"))
+
+      File.write!(Path.join(@test_dir, "prototypes/index.md"), """
+      ---
+      title: Prototypes
+      notion_id: proto-id
+      ---
+      # Prototypes
+      """)
+
+      File.write!(Path.join(@test_dir, "prototypes/storyfield/index.md"), """
+      ---
+      title: Storyfield
+      notion_id: storyfield-id
+      ---
+      # Storyfield
+      """)
+
+      File.write!(Path.join(@test_dir, "prototypes/frontdesk/index.md"), """
+      ---
+      title: Frontdesk
+      notion_id: frontdesk-id
+      ---
+      # Frontdesk
+      """)
+
+      {:ok, link_map} = LinkMap.build(@test_dir)
+
+      # Parent index.md linking to child directories
+      markdown = """
+      - [Storyfield](storyfield/index.md)
+      - [Frontdesk](frontdesk/index.md)
+      """
+
+      {:ok, [blocks]} =
+        AstToBlocks.convert(markdown, link_map: link_map, current_file: "prototypes/index.md")
+
+      [item1, item2] = blocks
+      mention1 = Enum.find(item1.rich_text, fn rt -> rt.type == "mention" end)
+      mention2 = Enum.find(item2.rich_text, fn rt -> rt.type == "mention" end)
+
+      assert mention1.page_id == "storyfield-id"
+      assert mention2.page_id == "frontdesk-id"
+    end
+
+    test "resolves child index.md links with ./ prefix" do
+      # Same as above but with ./storyfield/index.md syntax
+      File.mkdir_p!(Path.join(@test_dir, "parent/child"))
+
+      File.write!(Path.join(@test_dir, "parent/index.md"), """
+      ---
+      title: Parent
+      notion_id: parent-id
+      ---
+      """)
+
+      File.write!(Path.join(@test_dir, "parent/child/index.md"), """
+      ---
+      title: Child
+      notion_id: child-id
+      ---
+      """)
+
+      {:ok, link_map} = LinkMap.build(@test_dir)
+
+      markdown = "See [Child](./child/index.md)"
+
+      {:ok, [[block]]} =
+        AstToBlocks.convert(markdown, link_map: link_map, current_file: "parent/index.md")
+
+      mention_rt = Enum.find(block.rich_text, fn rt -> rt.type == "mention" end)
+      assert mention_rt.page_id == "child-id"
+    end
+  end
+
+  describe "skip_child_links option" do
+    @test_dir "test/fixtures/skip_child_test"
+
+    setup do
+      File.mkdir_p!(Path.join(@test_dir, "parent/child"))
+
+      File.write!(Path.join(@test_dir, "parent/index.md"), """
+      ---
+      title: Parent
+      notion_id: parent-id
+      ---
+      """)
+
+      File.write!(Path.join(@test_dir, "parent/child/index.md"), """
+      ---
+      title: Child
+      notion_id: child-id
+      ---
+      """)
+
+      File.write!(Path.join(@test_dir, "parent/sibling.md"), """
+      ---
+      title: Sibling
+      notion_id: sibling-id
+      ---
+      """)
+
+      {:ok, link_map} = LinkMap.build(@test_dir)
+
+      on_exit(fn ->
+        File.rm_rf!(@test_dir)
+      end)
+
+      {:ok, link_map: link_map}
+    end
+
+    test "skips child links when skip_child_links is true", %{link_map: link_map} do
+      markdown = "See [Child](child/index.md)"
+
+      {:ok, [[block]]} =
+        AstToBlocks.convert(markdown,
+          link_map: link_map,
+          current_file: "parent/index.md",
+          skip_child_links: true
+        )
+
+      # Should be plain text, no link or mention
+      assert Enum.all?(block.rich_text, fn rt ->
+               rt.type == "text" and is_nil(rt.link) and is_nil(rt.page_id)
+             end)
+
+      # Text content should still be present
+      text_content = Enum.map(block.rich_text, & &1.content) |> Enum.join()
+      assert text_content =~ "Child"
+    end
+
+    test "preserves sibling links when skip_child_links is true", %{link_map: link_map} do
+      markdown = "See [Sibling](sibling.md)"
+
+      {:ok, [[block]]} =
+        AstToBlocks.convert(markdown,
+          link_map: link_map,
+          current_file: "parent/index.md",
+          skip_child_links: true
+        )
+
+      # Should still resolve to page mention (sibling is not a child)
+      mention_rt = Enum.find(block.rich_text, fn rt -> rt.type == "mention" end)
+      assert mention_rt.page_id == "sibling-id"
+    end
+
+    test "preserves external links when skip_child_links is true", %{link_map: link_map} do
+      markdown = "See [Google](https://google.com)"
+
+      {:ok, [[block]]} =
+        AstToBlocks.convert(markdown,
+          link_map: link_map,
+          current_file: "parent/index.md",
+          skip_child_links: true
+        )
+
+      link_rt = Enum.find(block.rich_text, fn rt -> rt.content == "Google" end)
+      assert link_rt.link == "https://google.com"
+    end
+
+    test "renders child links when skip_child_links is false", %{link_map: link_map} do
+      markdown = "See [Child](child/index.md)"
+
+      {:ok, [[block]]} =
+        AstToBlocks.convert(markdown,
+          link_map: link_map,
+          current_file: "parent/index.md",
+          skip_child_links: false
+        )
+
+      # Should resolve to page mention
+      mention_rt = Enum.find(block.rich_text, fn rt -> rt.type == "mention" end)
+      assert mention_rt.page_id == "child-id"
+    end
+
+    test "renders child links by default (skip_child_links not set)", %{link_map: link_map} do
+      markdown = "See [Child](child/index.md)"
+
+      {:ok, [[block]]} =
+        AstToBlocks.convert(markdown, link_map: link_map, current_file: "parent/index.md")
+
+      # Should resolve to page mention
+      mention_rt = Enum.find(block.rich_text, fn rt -> rt.type == "mention" end)
+      assert mention_rt.page_id == "child-id"
+    end
   end
 
   describe "image conversion" do

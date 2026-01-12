@@ -62,8 +62,8 @@ For 50-file doc set with 2 changed:
 
 ## Acceptance Criteria
 
-- [ ] Unchanged files are skipped
-- [ ] Changed files are updated and hash stored
-- [ ] Files with nil hash sync and get hash populated
-- [ ] Sync summary shows correct "Skipped" count
-- [ ] Tests pass for all scenarios
+- [x] Unchanged files are skipped
+- [x] Changed files are updated and hash stored
+- [x] Files with nil hash sync and get hash populated
+- [x] Sync summary shows correct "Skipped" count
+- [x] Tests pass for all scenarios (2 new tests added)

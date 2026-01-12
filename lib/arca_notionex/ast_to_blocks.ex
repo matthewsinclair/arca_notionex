@@ -31,7 +31,11 @@ defmodule ArcaNotionex.AstToBlocks do
 
   @type earmark_ast :: {String.t(), list(), list(), map()} | String.t()
   @type convert_result :: {:ok, [[NotionBlock.t()]]} | {:error, atom(), String.t()}
-  @type convert_opts :: [link_map: LinkMap.t(), current_file: String.t()]
+  @type convert_opts :: [
+          link_map: LinkMap.t(),
+          current_file: String.t(),
+          skip_child_links: boolean()
+        ]
 
   @doc """
   Converts markdown content to Notion blocks.
@@ -241,25 +245,32 @@ defmodule ArcaNotionex.AstToBlocks do
     href = get_attr(attrs, "href")
     link_map = Keyword.get(opts, :link_map)
     current_file = Keyword.get(opts, :current_file)
+    skip_child_links = Keyword.get(opts, :skip_child_links, false)
 
-    if link_map do
-      # Use page mentions for resolved internal links
-      case LinkMap.resolve_for_notion(link_map, href, current_file: current_file) do
-        {:page_mention, page_id} ->
-          # Get link text for the mention content
-          text = flatten_text(children)
-          [RichText.page_mention(text, page_id)]
-
-        {:link, resolved_href} ->
-          children
-          |> children_to_rich_text(opts)
-          |> Enum.map(&add_link(&1, resolved_href))
-      end
+    # Skip links to child pages when enabled (Notion auto-displays them)
+    if skip_child_links && is_binary(current_file) && LinkMap.is_child_link?(href, current_file) do
+      # Return just the text without any link
+      children_to_rich_text(children, opts)
     else
-      # No link_map - keep as regular link
-      children
-      |> children_to_rich_text(opts)
-      |> Enum.map(&add_link(&1, href))
+      if link_map do
+        # Use page mentions for resolved internal links
+        case LinkMap.resolve_for_notion(link_map, href, current_file: current_file) do
+          {:page_mention, page_id} ->
+            # Get link text for the mention content
+            text = flatten_text(children)
+            [RichText.page_mention(text, page_id)]
+
+          {:link, resolved_href} ->
+            children
+            |> children_to_rich_text(opts)
+            |> Enum.map(&add_link(&1, resolved_href))
+        end
+      else
+        # No link_map - keep as regular link
+        children
+        |> children_to_rich_text(opts)
+        |> Enum.map(&add_link(&1, href))
+      end
     end
   end
 

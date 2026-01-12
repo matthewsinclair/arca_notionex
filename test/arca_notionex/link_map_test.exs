@@ -235,4 +235,147 @@ defmodule ArcaNotionex.LinkMapTest do
       assert result == "https://notion.so/rootid"
     end
   end
+
+  describe "resolve_for_notion/3" do
+    setup do
+      # Create nested directory structure like prototypes/storyfield/index.md
+      File.mkdir_p!(Path.join(@test_dir, "prototypes/storyfield"))
+      File.mkdir_p!(Path.join(@test_dir, "prototypes/frontdesk"))
+
+      File.write!(Path.join(@test_dir, "prototypes/index.md"), """
+      ---
+      title: Prototypes
+      notion_id: proto-parent-id
+      ---
+      # Prototypes
+      """)
+
+      File.write!(Path.join(@test_dir, "prototypes/storyfield/index.md"), """
+      ---
+      title: Storyfield
+      notion_id: storyfield-id
+      ---
+      # Storyfield
+      """)
+
+      File.write!(Path.join(@test_dir, "prototypes/frontdesk/index.md"), """
+      ---
+      title: Frontdesk
+      notion_id: frontdesk-id
+      ---
+      # Frontdesk
+      """)
+
+      {:ok, link_map} = LinkMap.build(@test_dir)
+      {:ok, link_map: link_map}
+    end
+
+    test "resolves child index.md link to page mention", %{link_map: link_map} do
+      # From prototypes/index.md linking to storyfield/index.md
+      result =
+        LinkMap.resolve_for_notion(
+          link_map,
+          "storyfield/index.md",
+          current_file: "prototypes/index.md"
+        )
+
+      assert result == {:page_mention, "storyfield-id"}
+    end
+
+    test "resolves child index.md with ./ prefix", %{link_map: link_map} do
+      result =
+        LinkMap.resolve_for_notion(
+          link_map,
+          "./storyfield/index.md",
+          current_file: "prototypes/index.md"
+        )
+
+      assert result == {:page_mention, "storyfield-id"}
+    end
+
+    test "returns link tuple for external URLs", %{link_map: link_map} do
+      result =
+        LinkMap.resolve_for_notion(
+          link_map,
+          "https://example.com",
+          current_file: "prototypes/index.md"
+        )
+
+      assert result == {:link, "https://example.com"}
+    end
+
+    test "returns link tuple for anchor-only links", %{link_map: link_map} do
+      result =
+        LinkMap.resolve_for_notion(
+          link_map,
+          "#section",
+          current_file: "prototypes/index.md"
+        )
+
+      assert result == {:link, "#section"}
+    end
+
+    test "returns link tuple for unresolved internal links", %{link_map: link_map} do
+      result =
+        LinkMap.resolve_for_notion(
+          link_map,
+          "nonexistent/index.md",
+          current_file: "prototypes/index.md"
+        )
+
+      assert result == {:link, "nonexistent/index.md"}
+    end
+  end
+
+  describe "is_child_link?/2" do
+    test "detects link to child directory" do
+      # From parent/index.md to parent/child/index.md
+      assert LinkMap.is_child_link?("child/index.md", "parent/index.md")
+    end
+
+    test "detects link to child directory with ./ prefix" do
+      assert LinkMap.is_child_link?("./child/index.md", "parent/index.md")
+    end
+
+    test "detects link to nested child directory" do
+      # From parent/index.md to parent/child/grandchild/index.md
+      assert LinkMap.is_child_link?("child/grandchild/index.md", "parent/index.md")
+    end
+
+    test "does not flag sibling file links" do
+      # sibling.md is in the same directory, not a child
+      refute LinkMap.is_child_link?("sibling.md", "parent/index.md")
+    end
+
+    test "does not flag parent directory links" do
+      # ../other.md is in parent directory
+      refute LinkMap.is_child_link?("../other.md", "parent/child/index.md")
+    end
+
+    test "does not flag same-level directory links" do
+      # ../sibling/index.md is a sibling directory, not child
+      refute LinkMap.is_child_link?("../sibling/index.md", "parent/child/index.md")
+    end
+
+    test "handles root level current file" do
+      # From root index.md to child directory
+      assert LinkMap.is_child_link?("child/index.md", "index.md")
+    end
+
+    test "does not flag anchor-only links as child" do
+      refute LinkMap.is_child_link?("#section", "parent/index.md")
+    end
+
+    test "handles link with anchor to child" do
+      assert LinkMap.is_child_link?("child/index.md#section", "parent/index.md")
+    end
+
+    test "does not flag external http URLs as child" do
+      refute LinkMap.is_child_link?("http://example.com", "parent/index.md")
+    end
+
+    test "does not flag external https URLs as child" do
+      refute LinkMap.is_child_link?("https://example.com/page", "parent/index.md")
+    end
+  end
 end

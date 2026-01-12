@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.12] - 2026-01-12
+
+### Fixed
+
+- **Link resolution to page mentions** - Internal `.md` links now correctly resolve to Notion page mentions when using `--relink`. Added comprehensive tests covering nested directory structures and relative path resolution.
+
+- **skip_child_links now opt-in** - The `--skip-child-links` flag is now a separate opt-in option instead of being auto-enabled with `--relink`. This fixes a bug where links to filesystem subdirectories were incorrectly stripped even when those pages were peers (not children) in Notion's hierarchy. Use `--skip-child-links` only when your filesystem subdirectories truly represent Notion child pages.
+
+### Added
+
+- **`--skip-child-links` CLI flag** - New flag for sync command to skip rendering links to filesystem subdirectories. Use this when subdirectories represent actual Notion child pages (which Notion displays automatically).
+
+- **`LinkMap.is_child_link?/2`** - New function to detect links that point to subdirectories. Used internally when `--skip-child-links` is enabled.
+
+### Tests
+
+- Added 11 new tests for `is_child_link?` in `link_map_test.exs`
+- Added 5 new tests for `skip_child_links` option in `ast_to_blocks_test.exs`
+- Added 2 new tests for ST0011 scenario in `ast_to_blocks_test.exs`
+- Total: 222 tests, 0 failures
+
 ## [0.1.11] - 2026-01-12
 
 ### Fixed

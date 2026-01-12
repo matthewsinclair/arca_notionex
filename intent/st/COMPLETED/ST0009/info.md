@@ -1,12 +1,24 @@
 ---
 intent_version: 2.2.0
-status: TODO
+status: Completed
 created: 20260112
-completed:
+completed: 20260112
 ---
 # ST0009: Image Support & Incremental Sync
 
-## Summary
+## As-Built Summary
+
+Both issues were fixed in v0.1.10:
+
+1. **Image support** - Markdown images (`![alt](url)`) now convert to Notion image blocks. External URLs fully supported. Relative paths and data URLs skipped silently.
+
+2. **Incremental sync** - Files with unchanged content are now skipped based on SHA-256 hash comparison. Dramatically reduces API calls and sync time.
+
+See work packages for implementation details:
+- WP/01/info.md - Image support (DONE)
+- WP/02/info.md - Incremental sync (DONE)
+
+## Original Summary
 
 Two related issues in the sync pipeline:
 

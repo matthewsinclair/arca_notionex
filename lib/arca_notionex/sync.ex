@@ -15,7 +15,8 @@ defmodule ArcaNotionex.Sync do
   @type sync_opts :: [
           root_page_id: String.t(),
           dry_run: boolean(),
-          relink: boolean()
+          relink: boolean(),
+          skip_child_links: boolean()
         ]
 
   @doc """
@@ -37,11 +38,12 @@ defmodule ArcaNotionex.Sync do
     root_page_id = Keyword.fetch!(opts, :root_page_id)
     dry_run = Keyword.get(opts, :dry_run, false)
     relink = Keyword.get(opts, :relink, false)
+    skip_child_links = Keyword.get(opts, :skip_child_links, false)
 
     with {:ok, files} <- discover_files(dir_path),
          :ok <- validate_unique_titles(files, dir_path) do
       if relink do
-        sync_with_relink(files, dir_path, root_page_id, dry_run)
+        sync_with_relink(files, dir_path, root_page_id, dry_run, skip_child_links)
       else
         # Single pass without link resolution
         sync_opts = [dry_run: dry_run, link_map: nil, base_dir: dir_path]
@@ -51,7 +53,7 @@ defmodule ArcaNotionex.Sync do
   end
 
   # Handle --relink with automatic two-pass when needed
-  defp sync_with_relink(files, dir_path, root_page_id, dry_run) do
+  defp sync_with_relink(files, dir_path, root_page_id, dry_run, skip_child_links) do
     # Check if any files need creation (no notion_id)
     new_files = Enum.filter(files, &file_needs_creation?(&1.path))
 
@@ -59,7 +61,14 @@ defmodule ArcaNotionex.Sync do
       # All files have notion_ids - single pass with link resolution
       IO.puts("All files have notion_ids - resolving links in single pass")
       link_map = build_link_map_safe(dir_path)
-      sync_opts = [dry_run: dry_run, link_map: link_map, base_dir: dir_path]
+
+      sync_opts = [
+        dry_run: dry_run,
+        link_map: link_map,
+        base_dir: dir_path,
+        skip_child_links: skip_child_links
+      ]
+
       sync_files(files, dir_path, root_page_id, sync_opts)
     else
       # Two-pass sync needed
@@ -78,7 +87,13 @@ defmodule ArcaNotionex.Sync do
         link_map = build_link_map_safe(dir_path)
 
         # Pass 2: Re-sync to update with resolved links
-        sync_opts_pass2 = [dry_run: dry_run, link_map: link_map, base_dir: dir_path]
+        sync_opts_pass2 = [
+          dry_run: dry_run,
+          link_map: link_map,
+          base_dir: dir_path,
+          skip_child_links: skip_child_links
+        ]
+
         {:ok, result2} = sync_files(files, dir_path, root_page_id, sync_opts_pass2)
 
         # Merge results: created from pass1, updated from pass2
@@ -126,6 +141,7 @@ defmodule ArcaNotionex.Sync do
     dry_run = Keyword.get(opts, :dry_run, false)
     link_map = Keyword.get(opts, :link_map)
     base_dir = Keyword.get(opts, :base_dir)
+    skip_child_links = Keyword.get(opts, :skip_child_links, false)
 
     # Compute relative path for link resolution
     current_file =
@@ -138,7 +154,7 @@ defmodule ArcaNotionex.Sync do
     # Build convert options
     convert_opts =
       if link_map do
-        [link_map: link_map, current_file: current_file]
+        [link_map: link_map, current_file: current_file, skip_child_links: skip_child_links]
       else
         []
       end
@@ -157,6 +173,7 @@ defmodule ArcaNotionex.Sync do
   defp sync_index_to_directory(file_path, directory_page_id, opts, dry_run) do
     link_map = Keyword.get(opts, :link_map)
     base_dir = Keyword.get(opts, :base_dir)
+    skip_child_links = Keyword.get(opts, :skip_child_links, false)
 
     current_file =
       if base_dir do
@@ -167,7 +184,7 @@ defmodule ArcaNotionex.Sync do
 
     convert_opts =
       if link_map do
-        [link_map: link_map, current_file: current_file]
+        [link_map: link_map, current_file: current_file, skip_child_links: skip_child_links]
       else
         []
       end
