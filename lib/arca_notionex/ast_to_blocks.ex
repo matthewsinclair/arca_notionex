@@ -101,8 +101,15 @@ defmodule ArcaNotionex.AstToBlocks do
   end
 
   def convert_node({"p", _attrs, children, _meta}, opts) do
-    rich_text = children_to_rich_text(children, opts)
-    split_paragraph_blocks(rich_text)
+    # Check if paragraph contains only an image (images are block-level in Notion)
+    case extract_standalone_image(children) do
+      {:ok, image_node} ->
+        convert_node(image_node, opts)
+
+      :not_image ->
+        rich_text = children_to_rich_text(children, opts)
+        split_paragraph_blocks(rich_text)
+    end
   end
 
   def convert_node({"ul", _attrs, children, _meta}, opts) do
@@ -167,6 +174,31 @@ defmodule ArcaNotionex.AstToBlocks do
       []
     else
       [NotionBlock.paragraph([RichText.text(trimmed)])]
+    end
+  end
+
+  def convert_node({"img", attrs, _, _}, _opts) do
+    src = get_attr(attrs, "src")
+    alt = get_attr(attrs, "alt") || ""
+
+    cond do
+      is_nil(src) or src == "" ->
+        # Missing src - skip silently
+        []
+
+      String.starts_with?(src, "data:") ->
+        # Data URLs not supported by Notion - skip with warning
+        IO.warn("Skipping data URL image (not supported by Notion)")
+        []
+
+      String.starts_with?(src, ["http://", "https://"]) ->
+        # External URL - create image block
+        [NotionBlock.image(src, alt)]
+
+      true ->
+        # Local/relative path - skip with warning
+        IO.warn("Skipping local image (Notion requires external URLs): #{src}")
+        []
     end
   end
 
@@ -346,6 +378,9 @@ defmodule ArcaNotionex.AstToBlocks do
   end
 
   # Helper functions
+
+  defp extract_standalone_image([{"img", _, _, _} = img]), do: {:ok, img}
+  defp extract_standalone_image(_), do: :not_image
 
   defp separate_inline_and_nested(children) do
     {inline, nested} =

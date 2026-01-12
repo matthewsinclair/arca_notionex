@@ -393,4 +393,71 @@ defmodule ArcaNotionex.AstToBlocksTest do
       assert link_rt.link == "overview.md"
     end
   end
+
+  describe "image conversion" do
+    test "converts external https image to notion block" do
+      markdown = "![Alt text](https://example.com/img.png)"
+
+      assert {:ok, [[block]]} = AstToBlocks.convert(markdown)
+      assert block.type == :image
+      assert block.image.type == "external"
+      assert block.image.external.url == "https://example.com/img.png"
+      assert [%RichText{content: "Alt text"}] = block.image.caption
+    end
+
+    test "converts external http image to notion block" do
+      markdown = "![Test](http://example.com/img.jpg)"
+
+      assert {:ok, [[block]]} = AstToBlocks.convert(markdown)
+      assert block.type == :image
+      assert block.image.external.url == "http://example.com/img.jpg"
+    end
+
+    test "handles image without alt text" do
+      markdown = "![](https://example.com/img.png)"
+
+      assert {:ok, [[block]]} = AstToBlocks.convert(markdown)
+      assert block.type == :image
+      assert block.image.caption == []
+    end
+
+    test "skips relative image paths" do
+      markdown = "![Local](./local.png)"
+
+      # Image is skipped, result is empty
+      assert {:ok, []} = AstToBlocks.convert(markdown)
+    end
+
+    test "skips data URL images" do
+      markdown = "![Data](data:image/png;base64,iVBORw0KGgo=)"
+
+      # Data URL image is skipped, result is empty
+      assert {:ok, []} = AstToBlocks.convert(markdown)
+    end
+
+    test "skips images with missing src" do
+      # Simulate malformed AST (no src attribute)
+      ast_node = {"img", [{"alt", "test"}], [], %{}}
+
+      assert [] = AstToBlocks.convert_node(ast_node, [])
+    end
+
+    test "skips images with empty src" do
+      ast_node = {"img", [{"src", ""}, {"alt", "test"}], [], %{}}
+
+      assert [] = AstToBlocks.convert_node(ast_node, [])
+    end
+
+    test "multiple images in sequence" do
+      markdown = """
+      ![First](https://example.com/1.png)
+
+      ![Second](https://example.com/2.png)
+      """
+
+      assert {:ok, [blocks]} = AstToBlocks.convert(markdown)
+      image_blocks = Enum.filter(blocks, fn b -> b.type == :image end)
+      assert length(image_blocks) == 2
+    end
+  end
 end

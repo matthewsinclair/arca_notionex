@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.10] - 2026-01-12
+
+### Added
+
+- **Image support** - Markdown images (`![alt](url)`) now convert to Notion image blocks. External URLs (http/https) are fully supported. Relative paths and data URLs are skipped with warnings.
+
+- **Incremental sync** - Files are now skipped during sync if their content hasn't changed (based on SHA-256 content hash). This dramatically reduces API calls and sync time for large doc sets. Files synced before this version will sync once to populate their hash.
+
+### Changed
+
+- Paragraph handler now extracts standalone images as block-level elements (required because EarmarkParser wraps images in `<p>` tags).
+
+### Tests
+
+- Added 8 new image conversion tests in `ast_to_blocks_test.exs`
+- Added 2 new incremental sync tests in `sync_test.exs`
+- Total: 197 tests, 0 failures
+
 ## [0.1.9] - 2026-01-09
 
 ### Fixed
