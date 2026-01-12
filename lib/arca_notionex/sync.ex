@@ -160,7 +160,15 @@ defmodule ArcaNotionex.Sync do
   end
 
   # Live mode: existing page (has notion_id) - check if content changed
-  defp sync_action(file_path, _parent_id, _title, blocks, body, %{notion_id: notion_id, content_hash: stored_hash}, false)
+  defp sync_action(
+         file_path,
+         _parent_id,
+         _title,
+         blocks,
+         body,
+         %{notion_id: notion_id, content_hash: stored_hash},
+         false
+       )
        when is_binary(notion_id) do
     if Frontmatter.content_changed?(body, stored_hash) do
       update_existing_page(file_path, notion_id, blocks, body)
