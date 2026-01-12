@@ -500,4 +500,45 @@ defmodule ArcaNotionex.SyncTest do
       assert output =~ "Pass 1/2"
     end
   end
+
+  describe "incremental sync (content hash)" do
+    @moduletag :tmp_dir
+
+    test "dry-run shows updated for files with notion_id (hash check is live-only)", %{
+      tmp_dir: tmp_dir
+    } do
+      # In dry-run mode, we don't check hash - we just preview the action
+      content = """
+      ---
+      title: "Page"
+      notion_id: "existing-id"
+      content_hash: "sha256:abc123"
+      ---
+      # Content
+      """
+
+      File.write!(Path.join(tmp_dir, "test.md"), content)
+
+      # Dry-run always shows "updated" for files with notion_id
+      assert {:ok, result} = Sync.sync_directory(tmp_dir, root_page_id: "fake-id", dry_run: true)
+      assert result.updated == ["test.md"]
+    end
+
+    test "content_changed? returns true for nil stored hash (first sync)", %{tmp_dir: tmp_dir} do
+      # File with notion_id but no content_hash (legacy or first sync)
+      content = """
+      ---
+      title: "Legacy Page"
+      notion_id: "legacy-id"
+      ---
+      # Content
+      """
+
+      File.write!(Path.join(tmp_dir, "legacy.md"), content)
+
+      # In dry-run mode, shows as updated
+      assert {:ok, result} = Sync.sync_directory(tmp_dir, root_page_id: "fake-id", dry_run: true)
+      assert result.updated == ["legacy.md"]
+    end
+  end
 end

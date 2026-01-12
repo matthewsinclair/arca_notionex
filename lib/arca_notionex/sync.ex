@@ -159,10 +159,14 @@ defmodule ArcaNotionex.Sync do
     {:ok, action, "[dry-run] Would #{action}: #{title}"}
   end
 
-  # Live mode: existing page (has notion_id) - update it
-  defp sync_action(file_path, _parent_id, _title, blocks, body, %{notion_id: notion_id}, false)
+  # Live mode: existing page (has notion_id) - check if content changed
+  defp sync_action(file_path, _parent_id, _title, blocks, body, %{notion_id: notion_id, content_hash: stored_hash}, false)
        when is_binary(notion_id) do
-    update_existing_page(file_path, notion_id, blocks, body)
+    if Frontmatter.content_changed?(body, stored_hash) do
+      update_existing_page(file_path, notion_id, blocks, body)
+    else
+      {:ok, :skipped, notion_id}
+    end
   end
 
   # Live mode: new page (no notion_id) - create it

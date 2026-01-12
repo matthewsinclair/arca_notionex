@@ -21,6 +21,7 @@ defmodule ArcaNotionex.Schemas.NotionBlock do
           | :quote
           | :table
           | :table_row
+          | :image
 
   @type t :: %__MODULE__{
           type: block_type(),
@@ -32,10 +33,11 @@ defmodule ArcaNotionex.Schemas.NotionBlock do
           table_width: non_neg_integer() | nil,
           has_column_header: boolean(),
           has_row_header: boolean(),
-          cells: [[RichText.t()]] | nil
+          cells: [[RichText.t()]] | nil,
+          image: map() | nil
         }
 
-  @block_types ~w(paragraph heading_1 heading_2 heading_3 bulleted_list_item numbered_list_item code quote table table_row)a
+  @block_types ~w(paragraph heading_1 heading_2 heading_3 bulleted_list_item numbered_list_item code quote table table_row image)a
 
   @primary_key false
   embedded_schema do
@@ -51,6 +53,8 @@ defmodule ArcaNotionex.Schemas.NotionBlock do
     field(:has_row_header, :boolean, default: false)
     # Table row cells (list of list of RichText)
     field(:cells, {:array, :any}, default: [])
+    # Image-specific fields
+    field(:image, :map)
   end
 
   @doc """
@@ -67,7 +71,8 @@ defmodule ArcaNotionex.Schemas.NotionBlock do
       :table_width,
       :has_column_header,
       :has_row_header,
-      :cells
+      :cells,
+      :image
     ])
     |> cast_embed(:rich_text)
     |> cast_embed(:children)
@@ -161,6 +166,26 @@ defmodule ArcaNotionex.Schemas.NotionBlock do
   end
 
   @doc """
+  Creates an image block.
+
+  Notion only supports external image URLs (http/https).
+  Caption is optional text shown below the image.
+  """
+  @spec image(String.t(), String.t()) :: t()
+  def image(url, caption \\ "") do
+    caption_rich_text = if caption != "", do: [RichText.text(caption)], else: []
+
+    %__MODULE__{
+      type: :image,
+      image: %{
+        type: "external",
+        external: %{url: url},
+        caption: caption_rich_text
+      }
+    }
+  end
+
+  @doc """
   Converts the NotionBlock struct to Notion API format.
   """
   @spec to_notion(t()) :: map()
@@ -197,6 +222,21 @@ defmodule ArcaNotionex.Schemas.NotionBlock do
         "rich_text" => Enum.map(block.rich_text, &RichText.to_notion/1),
         "language" => block.language || "plain text",
         "caption" => []
+      }
+    }
+  end
+
+  def to_notion(%__MODULE__{type: :image} = block) do
+    caption_notion =
+      block.image.caption
+      |> Enum.map(&RichText.to_notion/1)
+
+    %{
+      "type" => "image",
+      "image" => %{
+        "type" => "external",
+        "external" => %{"url" => block.image.external.url},
+        "caption" => caption_notion
       }
     }
   end
