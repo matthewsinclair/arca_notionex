@@ -541,4 +541,61 @@ defmodule ArcaNotionex.SyncTest do
       assert result.updated == ["legacy.md"]
     end
   end
+
+  describe "index.md handling" do
+    @moduletag :tmp_dir
+
+    test "index.md in subdirectory shows as updated in dry-run (populates parent)", %{
+      tmp_dir: tmp_dir
+    } do
+      # Create nested directory with index.md
+      subdir = Path.join(tmp_dir, "docs")
+      File.mkdir_p!(subdir)
+
+      content = """
+      ---
+      title: "Documentation"
+      ---
+      # Welcome
+
+      This is the docs index.
+      """
+
+      File.write!(Path.join(subdir, "index.md"), content)
+
+      # In dry-run, index.md should show as updated (it updates directory page)
+      assert {:ok, result} = Sync.sync_directory(tmp_dir, root_page_id: "fake-id", dry_run: true)
+      assert "docs/index.md" in result.updated
+    end
+
+    test "index.md alongside other files in dry-run", %{tmp_dir: tmp_dir} do
+      # Create directory with index.md and another file
+      subdir = Path.join(tmp_dir, "guide")
+      File.mkdir_p!(subdir)
+
+      index_content = """
+      ---
+      title: "Guide"
+      ---
+      # Guide Index
+      """
+
+      other_content = """
+      ---
+      title: "Getting Started"
+      ---
+      # Getting Started
+      """
+
+      File.write!(Path.join(subdir, "index.md"), index_content)
+      File.write!(Path.join(subdir, "getting-started.md"), other_content)
+
+      assert {:ok, result} = Sync.sync_directory(tmp_dir, root_page_id: "fake-id", dry_run: true)
+
+      # index.md updates the directory page
+      assert "guide/index.md" in result.updated
+      # other file creates a new child page
+      assert "guide/getting-started.md" in result.created
+    end
+  end
 end

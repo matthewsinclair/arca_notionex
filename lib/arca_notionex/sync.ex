@@ -153,6 +153,51 @@ defmodule ArcaNotionex.Sync do
     end
   end
 
+  # Sync index.md content to its parent directory page (instead of creating a child)
+  defp sync_index_to_directory(file_path, directory_page_id, opts, dry_run) do
+    link_map = Keyword.get(opts, :link_map)
+    base_dir = Keyword.get(opts, :base_dir)
+
+    current_file =
+      if base_dir do
+        Path.relative_to(file_path, base_dir)
+      else
+        file_path
+      end
+
+    convert_opts =
+      if link_map do
+        [link_map: link_map, current_file: current_file]
+      else
+        []
+      end
+
+    with {:ok, content} <- File.read(file_path),
+         {:ok, frontmatter, body} <- Frontmatter.parse(content),
+         {:ok, block_chunks} <- AstToBlocks.convert(body, convert_opts) do
+      blocks = List.flatten(block_chunks)
+
+      if dry_run do
+        {:ok, :updated, "[dry-run] Would update directory page with index.md content"}
+      else
+        # Check if content changed (compare with stored hash)
+        if Frontmatter.content_changed?(body, frontmatter.content_hash) do
+          case Client.update_page_blocks(directory_page_id, blocks) do
+            {:ok, _} ->
+              # Store directory page's notion_id in index.md frontmatter
+              Frontmatter.set_notion_id(file_path, directory_page_id, body)
+              {:ok, :updated, directory_page_id}
+
+            {:error, type, reason} ->
+              {:error, type, reason}
+          end
+        else
+          {:ok, :skipped, directory_page_id}
+        end
+      end
+    end
+  end
+
   # Dry-run mode: preview what would happen
   defp sync_action(_file_path, _parent_id, title, _blocks, _body, frontmatter, true = _dry_run) do
     action = select_action(frontmatter.notion_id)
@@ -344,6 +389,36 @@ defmodule ArcaNotionex.Sync do
       {:ok, :updated, _} -> {SyncResult.add_updated(res, file.relative_path), pmap}
       {:ok, :skipped, _} -> {SyncResult.add_skipped(res, file.relative_path), pmap}
       {:error, _type, reason} -> {SyncResult.add_error(res, file.relative_path, reason), pmap}
+    end
+  end
+
+  # Pattern-matched: index.md WITHOUT notion_id - populate parent directory page
+  defp sync_single_file(
+         %FileEntry{filename: "index.md"} = file,
+         _frontmatter,
+         res,
+         pmap,
+         root_page_id,
+         base_path,
+         sync_opts,
+         dry_run
+       ) do
+    case ensure_parent_pages(file, pmap, root_page_id, base_path, dry_run) do
+      {:ok, updated_pmap, parent_id} ->
+        # For index.md, update the parent directory page instead of creating a child
+        case sync_index_to_directory(file.path, parent_id, sync_opts, dry_run) do
+          {:ok, action, _} when action in [:created, :updated] ->
+            {SyncResult.add_updated(res, file.relative_path), updated_pmap}
+
+          {:ok, :skipped, _} ->
+            {SyncResult.add_skipped(res, file.relative_path), updated_pmap}
+
+          {:error, _type, reason} ->
+            {SyncResult.add_error(res, file.relative_path, reason), updated_pmap}
+        end
+
+      {:error, _type, reason} ->
+        {SyncResult.add_error(res, file.relative_path, reason), pmap}
     end
   end
 

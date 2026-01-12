@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.11] - 2026-01-12
+
+### Fixed
+
+- **index.md populates parent directory page** - When syncing directories containing `index.md`, the content now populates the directory page itself instead of creating a redundant child page. This matches the convention used by Jekyll, Hugo, Docusaurus, etc. The directory page's notion_id is stored in the index.md frontmatter for subsequent updates.
+
+### Tests
+
+- Added 2 new tests for index.md handling in `sync_test.exs`
+- Total: 199 tests, 0 failures
+
 ## [0.1.10] - 2026-01-12
 
 ### Added
