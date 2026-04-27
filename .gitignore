@@ -28,8 +28,8 @@ arca_notionex-*.tar
 # Escript build artifact
 /notionex
 
-# Editor/IDE config
-.claude/
+# Per-developer Claude Code settings (paths and tool allowlists vary).
+.claude/settings.local.json
 
 # Ignore intent upgrade backups
 .backup/backup-*
