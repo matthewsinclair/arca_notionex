@@ -1,0 +1,15 @@
+{
+  "project_name": "arca_notionex",
+  "author": "matts",
+  "created": "2026-01-07",
+  "st_prefix": "ST",
+  "intent_version": "2.10.0",
+  "plugins": {
+    "claude": {
+      "subagents_path": "intent/plugins/claude/subagents"
+    },
+    "agents": {
+      "config_path": "intent/plugins/agents"
+    }
+  }
+}

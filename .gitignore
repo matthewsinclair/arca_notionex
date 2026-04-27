@@ -30,3 +30,9 @@ arca_notionex-*.tar
 
 # Editor/IDE config
 .claude/
+
+# Ignore intent upgrade backups
+.backup/backup-*
+
+# AGENTS.md regeneration safety net (intent agents sync writes this; transient).
+/AGENTS.md.bak
