@@ -12,8 +12,6 @@ arca_notionex -- an Intent project. See `CLAUDE.md` for the Claude-specific over
 
 
 - Elixir / Erlang / OTP (see `mix.exs` for version)
-- Bash or Zsh (see the project's own docs for the target version)
-- Bats testing framework
 
 ### Setup
 
@@ -38,11 +36,6 @@ mix test
 ```
 
 
-```bash
-bats tests/
-```
-
-
 ### Building
 
 
@@ -62,7 +55,6 @@ intent st list      # list steel threads
 
 
 - Follow Elixir conventions enforced by `mix format`.
-- Shell scripts: 2-space indentation, POSIX-compliant where practical.
 - Markdown: no manual line wrapping; verblock frontmatter on persistent docs.
 - See `usage-rules.md` for the terse "DO / NEVER" contract.
 - See `intent/docs/working-with-llms.md` at the Intent install for the canon tech note on the LLM-facing layout and how hooks + critics + skills compose.
