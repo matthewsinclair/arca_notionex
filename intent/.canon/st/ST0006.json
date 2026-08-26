@@ -21,5 +21,25 @@
       "id": "ST0007",
       "note": "Fix md links with two-pass processing (pending - affects link resolution"
     }
+  ],
+  "attachments": [
+    {
+      "path": "design.md",
+      "text": "# Design - ST0006: Sync from Notion back into local markdown files\n\n## Approach\n\n[Planned approach for implementing this steel thread, including methodology and key steps]\n\n## Design Decisions\n\n[Key design decisions and their rationale]\n\n## Architecture\n\n[Architectural considerations and diagrams if applicable]\n\n## Alternatives Considered\n\n[Other approaches that were considered and why they were not chosen]",
+      "bytes": 410,
+      "sha256": "e0a1bf2261a616d6326d689738960423bc447ecc8f796bec3efe4d876407b38a"
+    },
+    {
+      "path": "impl.md",
+      "text": "# Implementation - ST0006: Sync from Notion back into local markdown files\n\n## Implementation\n\n[Notes on implementation details, decisions, challenges, and their resolutions]\n\n## Code Examples\n\n[Key code snippets and examples]\n\n## Technical Details\n\n[Specific technical details and considerations]\n\n## Challenges & Solutions\n\n[Challenges encountered during implementation and how they were resolved]",
+      "bytes": 399,
+      "sha256": "3ec292d5ad732dac35e827fc36fe8598ca227255b39804c2fb5527f3d53bb052"
+    },
+    {
+      "path": "tasks.md",
+      "text": "# Tasks - ST0006: Sync from Notion back into local markdown files\n\n## Tasks\n\n- [ ] Task 1\n- [ ] Task 2\n- [ ] Task 3\n- ...\n\n## Task Notes\n\n[Additional notes about specific tasks if needed]\n\n## Dependencies\n\n[Task dependencies and sequencing requirements]",
+      "bytes": 253,
+      "sha256": "f968bd7a38013df6e684a9ae5935530d0144b23c5d51a24eb3b9c60f920d1440"
+    }
   ]
 }

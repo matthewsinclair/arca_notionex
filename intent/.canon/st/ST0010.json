@@ -17,5 +17,25 @@
       "body": "## Summary\n\nModified sync pipeline so that `index.md` files populate their parent directory page instead of creating a redundant child page.\n\n## Implementation\n\n1. Added new `sync_single_file` clause matching `%FileEntry{filename: \"index.md\"}` (before the generic clause)\n2. This clause calls `sync_index_to_directory/4` which updates the parent directory page content\n3. The directory page's notion_id is stored in the index.md frontmatter for subsequent updates\n\n## Files Modified\n\n- `lib/arca_notionex/sync.ex` - Added `sync_index_to_directory/4` and index.md-specific clause\n- `test/arca_notionex/sync_test.exs` - Added 2 tests for index.md handling\n\n## Acceptance Criteria\n\n- [x] index.md content populates directory page (not child)\n- [x] Directory page notion_id stored in index.md frontmatter\n- [x] Other files in same directory still create as children\n- [x] Tests pass",
       "preamble": ""
     }
+  ],
+  "attachments": [
+    {
+      "path": "design.md",
+      "text": "# Design - ST0010: BUG: incorrect creation of child pages\n\n## Approach\n\n[Planned approach for implementing this steel thread, including methodology and key steps]\n\n## Design Decisions\n\n[Key design decisions and their rationale]\n\n## Architecture\n\n[Architectural considerations and diagrams if applicable]\n\n## Alternatives Considered\n\n[Other approaches that were considered and why they were not chosen]",
+      "bytes": 401,
+      "sha256": "64f3a51da729d5582c2c9385e8c7a5b49a3e850cd4d0532aa6e1934d52c7f84a"
+    },
+    {
+      "path": "impl.md",
+      "text": "# Implementation - ST0010: BUG: incorrect creation of child pages\n\n## Implementation\n\n[Notes on implementation details, decisions, challenges, and their resolutions]\n\n## Code Examples\n\n[Key code snippets and examples]\n\n## Technical Details\n\n[Specific technical details and considerations]\n\n## Challenges & Solutions\n\n[Challenges encountered during implementation and how they were resolved]",
+      "bytes": 390,
+      "sha256": "4656a0d22b80586f2d289043fce972e89f235e12bd7f1a2c0cf05eebff6896a8"
+    },
+    {
+      "path": "tasks.md",
+      "text": "# Tasks - ST0010: BUG: incorrect creation of child pages\n\n## Tasks\n\n- [ ] Task 1\n- [ ] Task 2\n- [ ] Task 3\n- ...\n\n## Task Notes\n\n[Additional notes about specific tasks if needed]\n\n## Dependencies\n\n[Task dependencies and sequencing requirements]",
+      "bytes": 244,
+      "sha256": "ae3798a26628ca18bc4df44a1d6af7e47b5da41e2ec1ee26e2cd4f9b943e3f5f"
+    }
   ]
 }
