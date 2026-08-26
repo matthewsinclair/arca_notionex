@@ -1,0 +1,6 @@
+# .intentfiles -- WHICH DATABASE ARTEFACTS ALSO HAVE A REALISED FORM ON DISK.
+#
+# Written on hv's order 2026-08-26 from thread status (organize --default was not yet
+# built): every OPEN thread is declared, and nothing else. OPEN means every status
+# except Completed and Cancelled.
+#
