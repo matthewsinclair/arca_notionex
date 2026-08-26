@@ -1,0 +1,12 @@
+{
+  "schema": "intent/thread@3.0",
+  "id": "ST0005",
+  "title": "CLI Integration [Title] Polish",
+  "status": "completed",
+  "created": "2026-01-07",
+  "completed": "2026-01-08",
+  "objective": "[Clear statement of what this steel thread aims to accomplish]",
+  "context": "[Background information and context for this steel thread, including why it's needed and how it fits into the larger project]",
+  "body": "",
+  "preamble": ""
+}

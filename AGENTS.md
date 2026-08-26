@@ -4,14 +4,16 @@ This is the primary tool-agnostic config file for AI coding agents working on th
 
 ## Project Overview
 
-arca_notionex -- an Intent project. See `CLAUDE.md` for Claude-specific overlay.
+arca_notionex -- an Intent project. See `CLAUDE.md` for the Claude-specific overlay.
 
 ## Development Environment
 
 ### Prerequisites
 
+
 - Elixir / Erlang / OTP (see `mix.exs` for version)
-- Bash 4.0+, POSIX-compliant shell
+- Bash or Zsh (see the project's own docs for the target version)
+- Bats testing framework
 
 ### Setup
 
@@ -19,24 +21,35 @@ arca_notionex -- an Intent project. See `CLAUDE.md` for Claude-specific overlay.
 intent doctor     # verify Intent configuration
 ```
 
+
 ```bash
-mix setup         # deps.get + ecto.setup (if configured)
-iex -S mix        # interactive shell
+mix deps.get
+mix compile
 ```
+
 
 ## Build and Test Commands
 
-### Testing
+### Test commands
+
 
 ```bash
 mix test
 ```
 
+
+```bash
+bats tests/
+```
+
+
 ### Building
+
 
 ```bash
 mix compile
 ```
+
 
 ### Validation
 
@@ -47,11 +60,12 @@ intent st list      # list steel threads
 
 ## Code Style
 
+
 - Follow Elixir conventions enforced by `mix format`.
 - Shell scripts: 2-space indentation, POSIX-compliant where practical.
 - Markdown: no manual line wrapping; verblock frontmatter on persistent docs.
 - See `usage-rules.md` for the terse "DO / NEVER" contract.
-- See `intent/docs/working-with-llms.md` for the canon tech note on the LLM-facing layout and how hooks + critics + skills compose.
+- See `intent/docs/working-with-llms.md` at the Intent install for the canon tech note on the LLM-facing layout and how hooks + critics + skills compose.
 
 ## Steel Thread + Work Package Process
 
@@ -69,13 +83,14 @@ intent wp done <STID/NN>     # mark done
 
 Never create steel thread or work package directories by hand -- always use the CLI.
 
-## Installed Skills
+## Installed Skills and Subagents
 
-_No skills installed. Run `intent claude skills list` to see available skills._
+Read live rather than reproduced here, because a snapshot of what is installed goes stale the moment anything is installed and nothing regenerates this file to notice:
 
-## Installed Subagents
-
-_No subagents installed. Run `intent claude subagents list` to see available subagents._
+```bash
+intent claude skills list
+intent claude subagents list
+```
 
 ## Critic Family
 
@@ -85,11 +100,22 @@ Per-language rule enforcement via thin subagents that read the rule library at i
 Task(subagent_type="critic-<lang>", prompt="review <targets>")
 ```
 
-A headless runner at `bin/intent_critic` (Greppable-proxy rules only; no LLM required) powers the pre-commit gate. Contract: `intent/docs/critics.md`. Exit codes: `0` clean, `1` findings, `2` error.
+The installed Intent tool's headless runner (`intent critic <lang>`, Greppable-proxy rules only; no LLM required) powers the pre-commit gate. Contract: `intent/docs/critics.md` at the Intent install. Exit codes: `0` clean, `1` findings, `2` error.
+
+## Rules of the Road
+
+Four cross-language principles govern all Intent projects. Every language pack concretises them; the critics enforce them.
+
+- **Highlander** (`IN-AG-HIGHLANDER-001`) -- there can be only one; no divergent copies of the same concern.
+- **PFIC** (`IN-AG-PFIC-001`) -- Pure-Functional-Idiomatic-Coordination; pattern match, pipe, tag, compose.
+- **Thin Coordinator** (`IN-AG-THIN-COORD-001`) -- coordinators parse to call to render; business logic lives elsewhere.
+- **No Silent Errors** (`IN-AG-NO-SILENT-001`) -- every failure surfaces; rescue-and-swallow is forbidden.
+
+Read any of them with `intent claude rules show <id>`. The terse DO / NEVER contract for this project lives in `usage-rules.md`.
 
 ## Rule Library
 
-All coding rules live in `intent/plugins/claude/rules/`. Each rule is a markdown file with YAML frontmatter, a Detection heuristic, and bad/good examples. Skills cite rule IDs; critics enforce them.
+The coding-rule library is served by the installed Intent tool, not vendored into this project. Access rules through the CLI below -- each rule carries YAML frontmatter, a Detection heuristic, and bad/good examples. Skills cite rule IDs; critics enforce them.
 
 ```bash
 intent claude rules list        # enumerate
@@ -99,7 +125,7 @@ intent claude rules validate    # schema check
 
 ## Extensions
 
-User extensions live at `~/.intent/ext/<name>/` and contribute subagents, skills, or rule packs without modifying canon. Reference extension: `worker-bee`.
+User extensions live at `~/.intent/ext/<name>/` and contribute subagents, skills, or rule packs without modifying canon.
 
 ```bash
 intent ext list
@@ -107,11 +133,11 @@ intent ext show <name>
 intent ext new <name>
 ```
 
-Authoring guide: `intent/docs/writing-extensions.md`.
+Authoring guide: `intent/docs/writing-extensions.md` at the Intent install.
 
 ## Session Hooks
 
-`.claude/settings.json` wires three Claude Code lifecycle hooks: **SessionStart** (inject context + `/in-session` reminder), **UserPromptSubmit** (strict gate -- block first prompt until `/in-session` runs), **Stop** (remind `/in-finish` at wrap-up). Full architecture: `intent/docs/working-with-llms.md#session-hook-architecture`.
+`.claude/settings.json` wires three Claude Code lifecycle hooks: **SessionStart** (inject context + `/in-session` reminder), **UserPromptSubmit** (strict gate -- block first prompt until `/in-session` runs), **Stop** (remind `/in-finish` at wrap-up). Full architecture: `intent/docs/working-with-llms.md#session-hook-architecture` at the Intent install.
 
 ## Socrates vs Diogenes FAQ
 
@@ -120,7 +146,7 @@ Two distinct subagents for two distinct concerns:
 - **Socrates** -- CTO Review Mode. Architectural and strategic technical decision-making via Socratic dialog.
 - **Diogenes** -- Elixir Test Architect. Test-specification generation and gap analysis.
 
-They have never been the same agent. FAQ + forensic detail: `intent/docs/working-with-llms.md#socrates-vs-diogenes-faq`.
+They have never been the same agent. FAQ + forensic detail: `intent/docs/working-with-llms.md#socrates-vs-diogenes-faq` at the Intent install.
 
 ## Testing Instructions
 
@@ -128,7 +154,7 @@ They have never been the same agent. FAQ + forensic detail: `intent/docs/working
 2. Make changes.
 3. Run the suite again; confirm no regressions.
 4. Add new tests for new functionality.
-5. Before commit, the pre-commit critic gate checks staged files for `CRITICAL` + `WARNING` findings. See `intent/docs/pre-commit-hook.md`.
+5. Before commit, the pre-commit critic gate checks staged files for `CRITICAL` + `WARNING` findings. See `intent/docs/pre-commit-hook.md` at the Intent install.
 
 ## Commit Guidelines
 
@@ -144,15 +170,20 @@ They have never been the same agent. FAQ + forensic detail: `intent/docs/working
 
 ## Additional Resources
 
+At the Intent install (not this project):
+
 - `intent/docs/working-with-llms.md` -- canon tech note (narrative).
 - `intent/docs/critics.md` -- critic contract.
 - `intent/docs/rules.md` -- rule library authoring guide.
 - `intent/docs/writing-extensions.md` -- extension author guide.
 - `intent/docs/pre-commit-hook.md` -- pre-commit critic gate install + configure.
-- `intent/docs/migration-v2.10.0.md` -- v2.9.0 -> v2.10.0 migration guide (directory move + recovery).
+
+In this project:
+
 - `intent/llm/MODULES.md` -- module registry (Highlander enforcement).
 - `CLAUDE.md` -- Claude-specific overlay.
+- `usage-rules.md` -- DO / NEVER contract for this project.
 
 ---
 
-_Generated by Intent v2.10.0 on 2026-04-27_
+_Generated by Intent v3.0.0 from `lib/templates/llm/_AGENTS.md`._

@@ -1,0 +1,12 @@
+{
+  "schema": "intent/thread@3.0",
+  "id": "ST0011",
+  "title": "Link resolution and duplicate subpage handling",
+  "status": "completed",
+  "created": "2026-01-12",
+  "completed": "2026-01-12",
+  "objective": "Fix link handling issues in notionex sync where internal links weren't resolving to page mentions and `skip_child_links` was incorrectly auto-enabled.",
+  "context": "",
+  "body": "## As-Built Summary\n\n### Issue 1: Link Resolution - VERIFIED WORKING\n\nLink resolution was verified working through comprehensive tests. Added 18 new tests covering:\n- Nested directory structures (`prototypes/storyfield/index.md`)\n- Relative path resolution (`../root.md` from `docs/child.md`)\n- Anchor handling (`overview.md#section`)\n- External URL preservation\n\n### Issue 2 & 3: skip_child_links - FIXED (Made Opt-In)\n\nThe original implementation auto-enabled `skip_child_links` with `--relink`, which incorrectly stripped links based on filesystem structure rather than Notion hierarchy.\n\n**Solution implemented**: Option A - Made `skip_child_links` opt-in via explicit `--skip-child-links` flag.\n\n| Before (broken) | After (fixed) |\n|-----------------|---------------|\n| `--relink` auto-enables skip_child_links | `--relink` preserves all links |\n| No way to disable | `--skip-child-links` flag to opt-in |\n| Peer pages incorrectly stripped | Safe default behavior |\n\n## Files Modified\n\n| File | Changes |\n|------|---------|\n| `lib/arca_notionex/commands/sync_command.ex` | Added `--skip-child-links` flag |\n| `lib/arca_notionex/sync.ex` | Removed hardcoded `skip_child_links: true`, now uses flag value |\n| `lib/arca_notionex/link_map.ex` | Added `is_child_link?/2` function |\n| `lib/arca_notionex/ast_to_blocks.ex` | Added `skip_child_links` option handling |\n| `test/arca_notionex/link_map_test.exs` | Added 11 tests for `is_child_link?` |\n| `test/arca_notionex/ast_to_blocks_test.exs` | Added 7 tests for link resolution and skip_child_links |\n\n## Usage\n\n```bash\n# Default: --relink preserves all links as page mentions\nnotionex sync --dir ./docs --root-page abc123 --relink\n\n# Opt-in: Skip links to subdirectories (when they are true Notion children)\nnotionex sync --dir ./docs --root-page abc123 --relink --skip-child-links\n```\n\n## Tests\n\n- Total: 222 tests, 0 failures\n- Version: 0.1.12",
+  "preamble": ""
+}
