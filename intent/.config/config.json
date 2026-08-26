@@ -1,16 +1,11 @@
 {
-  "intent_version": "3.0.0",
-  "project_name": "arca_notionex",
   "author": "matts",
-  "project_id": "c5276d2f-ce97-4cb1-98c3-8fbc3964e686",
+  "created": "2026-01-07",
   "intent_dir": "intent",
+  "intent_version": "3.0.0",
   "languages": [
     "elixir"
   ],
-  "todo": {
-    "window_hours": 24
-  },
-  "created": "2026-01-07",
   "plugins": {
     "agents": {
       "config_path": "intent/plugins/agents"
@@ -19,5 +14,10 @@
       "subagents_path": "intent/plugins/claude/subagents"
     }
   },
-  "st_prefix": "ST"
+  "project_id": "c5276d2f-ce97-4cb1-98c3-8fbc3964e686",
+  "project_name": "arca_notionex",
+  "st_prefix": "ST",
+  "todo": {
+    "window_hours": 24
+  }
 }
