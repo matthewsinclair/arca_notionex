@@ -5,11 +5,11 @@ An index of every steel thread in the project. A steel thread is a self-containe
 | ID     | Slug | Status    | Created    | Completed  |
 | ------ | ---- | --------- | ---------- | ---------- |
 | ST0011 |      | Completed | 2026-01-12 | 2026-01-12 |
-| ST0010 |      | Completed | 2026-01-12 |            |
+| ST0010 |      | Completed | 2026-01-12 | 2026-01-12 |
 | ST0009 |      | Completed | 2026-01-12 | 2026-01-12 |
 | ST0008 |      | Completed | 2026-01-08 | 2026-01-08 |
-| ST0007 |      | Completed | 2026-01-08 |            |
-| ST0006 |      | Completed | 2026-01-08 |            |
+| ST0007 |      | Completed | 2026-01-08 | 2026-01-08 |
+| ST0006 |      | Completed | 2026-01-08 | 2026-01-08 |
 | ST0005 |      | Completed | 2026-01-07 | 2026-01-08 |
 | ST0004 |      | Completed | 2026-01-07 | 2026-01-08 |
 | ST0003 |      | Completed | 2026-01-07 | 2026-01-08 |

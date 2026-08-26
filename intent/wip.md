@@ -51,6 +51,6 @@ Version: 0.1.12 (222 tests, 0 failures)
 This document captures the current state of development. When starting a new session:
 
 1. Check `intent/restart.md` for session context
-2. Review recent steel threads in `intent/st/COMPLETED/`
+2. Review recent steel threads in `intent/history/`
 3. Use `intent st list` to see all steel threads
 4. Use `intent st new "Title"` to create new work items

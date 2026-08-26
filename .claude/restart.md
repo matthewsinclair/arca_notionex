@@ -45,7 +45,7 @@ intent st done <id>                   # Mark complete
 | Project Guidelines | `CLAUDE.md` | Coding standards, patterns |
 | Changelog | `CHANGELOG.md` | Version history |
 | WIP Status | `intent/wip.md` | Current work status |
-| Steel Threads | `intent/st/COMPLETED/` | Completed work docs |
+| Steel Threads | `intent/history/` | Completed work docs |
 | Session Context | `intent/restart.md` | Restart context |
 
 ## Key Code Files

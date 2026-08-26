@@ -52,7 +52,7 @@ All steel threads complete. No active WIP.
 - `CLAUDE.md` - Project guidelines
 - `CHANGELOG.md` - Version history
 - `intent/wip.md` - Work in progress status
-- `intent/st/COMPLETED/` - Completed steel threads
+- `intent/history/` - Completed steel threads
 - `intent/st/steel_threads.md` - Steel thread index
 
 ## Common Tasks
