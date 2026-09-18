@@ -1,0 +1,14 @@
+{
+  "id": "01M0ZSXR8C53N03NXHGT85WZPT",
+  "ts": "2026-08-26T19:49:32.059Z",
+  "principal": "local",
+  "project_id": "c5276d2f-ce97-4cb1-98c3-8fbc3964e686",
+  "op": "attachment.put",
+  "subject": {
+    "type": "attachment",
+    "id": "ST0001/arca_notionex-kickoff.md"
+  },
+  "payload": {
+    "via": "address"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "id": "01M0ZSXR2G28Q7EP6M3X7X1ZY4",
+  "ts": "2026-08-26T19:49:31.863Z",
+  "principal": "local",
+  "project_id": "c5276d2f-ce97-4cb1-98c3-8fbc3964e686",
+  "op": "attachment.put",
+  "subject": {
+    "type": "attachment",
+    "id": "ST0008/tasks.md"
+  },
+  "payload": {
+    "via": "address"
+  }
+}

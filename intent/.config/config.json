@@ -1,8 +1,17 @@
 {
   "author": "matts",
+  "backup": {
+    "enabled": true,
+    "retain": {
+      "daily": 7,
+      "monthly": 12,
+      "weekly": 4
+    },
+    "schedule": "daily"
+  },
   "created": "2026-01-07",
   "intent_dir": "intent",
-  "intent_version": "3.0.0",
+  "intent_version": "3.0.3",
   "languages": [
     "elixir"
   ],
